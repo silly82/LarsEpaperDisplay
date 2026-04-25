@@ -2,7 +2,7 @@
 
 Alle nennenswerten Änderungen pro Version.
 
-## [0.7.1] – 2026-04-26
+## [0.7.1] – 2026-04-25
 
 ### MQTT
 - **JSON + flach parallel:** Bei gesetztem `TOPIC_TELEMETRY_JSON` werden weiterhin alle nicht leeren `lars/mppt/…`-Topics abonniert (Überlagerung, z. B. Solar nur auf `lars/mppt/solarW`).
