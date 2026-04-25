@@ -28,9 +28,11 @@
 #define MQTT_CLIENT_ID      "camping-epaper"   // muss im Broker eindeutig sein
 #define MQTT_PORT_DEFAULT   1883
 
-// MPPT-/Batterie-Werte – zwei Modi (siehe main.cpp mqtt_connect):
+// MPPT-/Batterie-Werte (siehe main.cpp):
 //   • TOPIC_TELEMETRY_JSON nicht leer: ein Topic, Payload = JSON-Objekt (UTF-8)
-//   • TOPIC_TELEMETRY_JSON leer: flache Topics unten, Payload = reiner Float als ASCII
+//   • Zusätzlich werden alle unten nicht-leeren flachen Topics abonniert (Überlagerung),
+//     z. B. Solar nur auf lars/mppt/solarW während der Rest im JSON steht.
+//   • TOPIC_TELEMETRY_JSON leer: nur flache Topics.
 #define TOPIC_TELEMETRY_JSON  "camping/telemetry/mppt"
 
 // Flache Topics (nur aktiv, wenn TOPIC_TELEMETRY_JSON "")
@@ -67,8 +69,8 @@
 
 // ── Refresh-Timing ────────────────────────────────────────────
 // Nur Vollbild (epd_clear): Partial-Update fuer Messwerte entfaellt (Ghosting/Panel).
-#define DATA_REFRESH_INTERVAL_MS  15000UL    // Minimaler Abstand zwischen Refreshes [ms]
-#define FULL_REFRESH_INTERVAL     300000UL   // Vollbild-Intervall gegen Geister [ms]
+#define DATA_REFRESH_INTERVAL_MS  30000UL    // Minimaler Abstand zwischen Vollbild-Refreshes [ms]
+#define FULL_REFRESH_INTERVAL     600000UL   // Periodisches Vollbild gegen Ghosting [ms] (10 min)
 
 // ── Schwellenwerte fuer Display-Refresh ───────────────────────
 // Refresh nur wenn sich mindestens ein Wert um diesen Betrag geaendert hat.

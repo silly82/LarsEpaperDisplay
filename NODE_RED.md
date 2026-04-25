@@ -91,7 +91,7 @@ flowchart LR
 
 ## Firmware-Zweig `feature/mqtt-json-telemetry`
 
-Auf diesem Branch abonniert das Display **direkt** `TOPIC_TELEMETRY_JSON` (Standard: `camping/telemetry/mppt`) und parst **ein JSON-Objekt** pro Nachricht. Die flachen Topics `lars/mppt/soc` usw. werden dann **nicht** mehr abonniert (Rückfall: `TOPIC_TELEMETRY_JSON` in `config.h` auf `""` setzen).
+Das Display abonniert **`TOPIC_TELEMETRY_JSON`** (Standard: `camping/telemetry/mppt`) und parst **ein JSON-Objekt** pro Nachricht. **Zusätzlich** werden alle in `config.h` gesetzten flachen MPPT-Topics (`lars/mppt/soc` usw.) abonniert – z. B. wenn Solar weiter nur auf `lars/mppt/solarW` ankommt. Nur-Flach-Betrieb: `TOPIC_TELEMETRY_JSON` auf `""` setzen.
 
 **Unterstützte Felder** (alle optional; fehlende Keys lassen den bisherigen Wert / „--“):
 
@@ -231,8 +231,9 @@ return;
 ## Checkliste
 
 - [ ] Broker erreichbar vom ESP32 (gleiches LAN/VPN).
-- [ ] `config.h`: Entweder natives JSON (`TOPIC_TELEMETRY_JSON`) **oder** Adapter-Ziele `lars/mppt/…`; Temperatur-Topics wie in `config.h`.
+- [ ] `config.h`: JSON-Topic (`TOPIC_TELEMETRY_JSON`) und/oder flache `lars/mppt/…` wie im Flow; Temperatur-Topics wie in `config.h`.
 - [ ] Relais: nach jedem Schalten `…/state` setzen, damit die Leiste stimmt.
-- [ ] Telemetrie: **retain false**, damit nicht alte Werte „kleben“ bleiben (außer bewusst für State).
+- [ ] Telemetrie: **retain false** für Live-Messwerte (außer bewusst für State/„letzter Istwert“).
+- [ ] **Nur bei Änderung** (z. B. Victron `onlyChanges`): ohne Retain sieht das Display nach Start/Reconnect evtl. lange keine MPPT-Werte → **Snapshot beim Deploy**, **Intervall-Publish** oder **retain true** auf dem JSON-/Flach-Topic erwägen (siehe Einleitung).
 
 Bei Fragen zur Firmware-Seite siehe [`README.md`](README.md) und [`src/config.h`](src/config.h).

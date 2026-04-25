@@ -154,20 +154,32 @@ static void render_data(const VictronData &d) {
     // ── Trennlinie ───────────────────────────────────────────────────────────
     draw_hline(COL_LEFT, 340, EPD_WIDTH - 40);
 
-    // ── Abschnitt 3: Temperaturen (y 340..400) ───────────────────────────────
-    // 4 Spalten à ~230 px: Aus · Inn · Kuehl · Schrank
+    // ── Abschnitt 3: Temperaturen (zwischen y=340 und y=400) ─────────────────
+    // Kleine Schrift: optisch etwas unter die geometrische Mitte schieben, damit
+    // oben mehr Luft zur Trennlinie ist und unten weniger Leerfeld bleibt.
     // \xb0 = ° in Latin-1 (wie bei writeln erwartet)
-    struct { float val; const char *label; int x; } temps[] = {
-        { d.temp_aussen,  "Aus", 20  },
-        { d.temp_innen,   "Inn", 250 },
-        { d.temp_fridge,  "Khl", 480 },
-        { d.temp_cabinet, "Ger", 710 },
+    const int temp_col_w = (EPD_WIDTH - 2 * COL_LEFT) / 4;
+    constexpr int TEMP_BAND_Y0       = 340;
+    constexpr int TEMP_BAND_Y1       = 400;
+    constexpr int TEMP_BAND_MID      = (TEMP_BAND_Y0 + TEMP_BAND_Y1) / 2;
+    constexpr int TEMP_VERTICAL_BIAS = 9;   // px nach unten (Feintuning)
+    constexpr int TEMP_BASE_GAP        = 24;  // Abstand der beiden Baselines
+    const int mid    = TEMP_BAND_MID + TEMP_VERTICAL_BIAS;
+    const int y_temp_lbl = mid - TEMP_BASE_GAP / 2;
+    const int y_temp_val = mid + TEMP_BASE_GAP / 2;
+    struct { float val; const char *name; } temps[] = {
+        { d.temp_aussen,  "Aussen" },
+        { d.temp_innen,   "Innen" },
+        { d.temp_fridge,  "Kuehlschrank" },
+        { d.temp_cabinet, "Geraeteschrank" },
     };
-    for (auto &t : temps) {
+    for (size_t i = 0; i < sizeof(temps) / sizeof(temps[0]); i++) {
+        int x = COL_LEFT + (int)i * temp_col_w;
+        draw_text_small(temps[i].name, x, y_temp_lbl);
         char tmp[16];
-        ftoa1(t.val, tmp, sizeof(tmp));
-        snprintf(buf, sizeof(buf), "%s %s\xb0""C", t.label, tmp);
-        draw_text(buf, t.x, 382);
+        ftoa1(temps[i].val, tmp, sizeof(tmp));
+        snprintf(buf, sizeof(buf), "%s \xb0""C", tmp);
+        draw_text_small(buf, x, y_temp_val);
     }
 }
 
@@ -183,10 +195,9 @@ static void render_status(bool mqtt_ok, const char *ip, int menu_sel, const int8
 
     draw_hline(COL_LEFT, 400, EPD_WIDTH - 40);
 
-    snprintf(buf, sizeof(buf), "WiFi: %s", ip ? ip : "--");
+    snprintf(buf, sizeof(buf), "WiFi: %s   MQTT: %s",
+             ip ? ip : "--", mqtt_ok ? "OK" : "--");
     draw_text_small(buf, COL_LEFT, 430);
-
-    draw_text_small(mqtt_ok ? "MQTT: OK" : "MQTT: --", COL_MID + 120, 430);
 
     // Menueleiste: Relais zeigen Istzustand (MQTT state)
     const int y0   = 458;

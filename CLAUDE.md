@@ -1,6 +1,6 @@
 # CLAUDE.md – Camping-Bus E-Paper Display
 
-**Version:** 0.7.0 · Vollständige Nutzerdoku: [`README.md`](README.md) · Änderungen: [`CHANGELOG.md`](CHANGELOG.md)
+**Version:** 0.7.1 · Vollständige Nutzerdoku: [`README.md`](README.md) · Änderungen: [`CHANGELOG.md`](CHANGELOG.md)
 
 ## Kurzüberblick
 
@@ -33,7 +33,8 @@ MQTT-E-Paper-Anzeige (LilyGo T5 4.7″ S3): MPPT/Batterie per **JSON-Topic** ode
 
 ## Refresh
 
-- **Vollbild:** Schwellen + `DATA_REFRESH_INTERVAL_MS`, `FULL_REFRESH_INTERVAL`, Menü „Bild neu“.
+- **Vollbild:** Schwellen `DISPLAY_THRESHOLD_*` + `DATA_REFRESH_INTERVAL_MS` (30 s), periodisch `FULL_REFRESH_INTERVAL` (10 min), Menü „Bild neu“.
+- **Menü / Relais-State:** Partial nur untere Leiste (y ≥ 400).
 - **Menü-Streifen:** `epd_draw_grayscale_image(Rect, fb + offset)` nur für unteren Bereich.
 
 ## Provisioning

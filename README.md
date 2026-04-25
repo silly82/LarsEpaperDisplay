@@ -1,6 +1,6 @@
 # Camping-Bus E-Paper Display
 
-**Version:** 0.7.0 (siehe [`VERSION`](VERSION), Historie [`CHANGELOG.md`](CHANGELOG.md))
+**Version:** 0.7.1 (siehe [`VERSION`](VERSION), Historie [`CHANGELOG.md`](CHANGELOG.md))
 
 E-Paper-Statusanzeige für den Campingbus: MPPT/Batterie- und Solarwerte per **MQTT**, steuerbare **Relais** über dasselbe MQTT, Bedienung mit **einem Taster** und **unterem Menü** auf dem LilyGo **T5 4.7″** (ESP32-S3).
 
@@ -43,7 +43,7 @@ Alle anpassbaren Werte: [`src/config.h`](src/config.h) (Topics, Timing, Menü, R
 
 Zwei Modi (siehe `TOPIC_TELEMETRY_JSON` in [`src/config.h`](src/config.h)):
 
-1. **JSON-Telemetrie** (Standard: Topic nicht leer, z. B. `camping/telemetry/mppt`): ein MQTT-Topic, Payload = **JSON-Objekt** mit optionalen Feldern `soc`, `voltage`/`bat_v`, `solar_w`/`solarW`, `current_a`/`batA`, `load_w`/`loadW`. **Temperaturen** kommen in der Firmware **nicht** aus diesem JSON, sondern nur über die separaten Topics unten.
+1. **JSON-Telemetrie** (Standard: Topic nicht leer, z. B. `camping/telemetry/mppt`): ein MQTT-Topic, Payload = **JSON-Objekt**; Messwerte optional unter `data`, `mppt` oder `payload` verschachtelt. Felder u. a. `soc`, `voltage`/`bat_v`, `solar_w`/`solarW` sowie Aliase wie `pv_power`, `solar_power`, `yield_power`, `current_a`/`batA`, `load_w`/`loadW` (Zahlen auch als String). Parallel werden **flache** `lars/mppt/…`-Topics mitabonniert, falls in `config.h` gesetzt. **Temperaturen** nur über die Topics unten, nicht aus dem MPPT-JSON.
 2. **Flache Topics**: wenn `TOPIC_TELEMETRY_JSON` auf `""` steht, gelten die Zeilen unten; Payload jeweils **reiner Text** mit **Float** (z. B. `"78.5"`).
 
 | Topic (Standard, flacher Modus) | Bedeutung |
@@ -89,12 +89,14 @@ Node-RED (oder anderer Dienst) sollte nach dem Schalten den **Istzustand** auf `
 
 | Auslöser | Verhalten |
 |----------|-----------|
-| Neue / geänderte Messwerte über **Schwellen** (`DISPLAY_THRESHOLD_*` in `config.h`) und Mindestabstand `DATA_REFRESH_INTERVAL_MS` (15 s) | Vollbild mit Messwerten + Menü |
-| Intervall `FULL_REFRESH_INTERVAL` (5 min) | Vollbild (Geister reduzieren) |
+| Neue / geänderte Messwerte über **Schwellen** (`DISPLAY_THRESHOLD_*` in `config.h`) und Mindestabstand `DATA_REFRESH_INTERVAL_MS` (30 s) | Vollbild mit Messwerten + Menü |
+| Intervall `FULL_REFRESH_INTERVAL` (10 min) | Vollbild (Geister reduzieren), unabhängig von kleinen Messwertänderungen |
 | Menüwechsel / neuer Relais-State | Nur Bereich ab **y = 400** (WiFi/MQTT + Menüleiste) |
 | Start, Menü „Bild neu“ (Lang) | Vollbild |
 
 Messwerte-Bereich oben: **kein** klassisches Partial mehr (Ghosting) – nur **Vollbild**.
+
+**Temperaturzeile:** vier Sensoren mit vollem Namen in **kleiner Schrift**, zwei Zeilen (Bezeichnung + °C), im Streifen zwischen den Trennlinien vertikal ausgerichtet (`TEMP_VERTICAL_BIAS` in `display.cpp`).
 
 ---
 

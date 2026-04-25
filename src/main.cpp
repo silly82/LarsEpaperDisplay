@@ -7,6 +7,7 @@
 #include <epd_driver.h>
 #include <string.h>
 #include <ctype.h>
+#include <math.h>
 
 #include "config.h"
 #include "display.h"
@@ -41,6 +42,45 @@ static char         mqtt_json_buf[768];
 // MQTT
 // ─────────────────────────────────────────────────────────────────────────────
 
+// UTF-8-BOM überspringen (manche Publisher vor "{")
+static const char *json_skip_bom(const char *s) {
+    if (s && (unsigned char)s[0] == 0xEF && (unsigned char)s[1] == 0xBB &&
+        (unsigned char)s[2] == 0xBF)
+        return s + 3;
+    return s;
+}
+
+// Messwerte oft unter data/mppt/payload verschachtelt
+static JsonObjectConst telemetry_root(const JsonDocument &doc) {
+    if (doc["data"].is<JsonObject>())
+        return doc["data"].as<JsonObjectConst>();
+    if (doc["mppt"].is<JsonObject>())
+        return doc["mppt"].as<JsonObjectConst>();
+    if (doc["payload"].is<JsonObject>())
+        return doc["payload"].as<JsonObjectConst>();
+    return doc.as<JsonObjectConst>();
+}
+
+static bool json_to_float(JsonVariantConst v, float &out) {
+    if (v.isNull()) return false;
+    if (v.is<float>() || v.is<double>()) {
+        out = v.as<float>();
+        return !isnan(out) && !isinf(out);
+    }
+    if (v.is<int>() || v.is<long>() || v.is<unsigned long>()) {
+        out = static_cast<float>(v.as<double>());
+        return true;
+    }
+    if (v.is<const char *>()) {
+        const char *s = v.as<const char *>();
+        if (!s || !*s) return false;
+        char *end = nullptr;
+        out = strtof(s, &end);
+        return end != s && !isnan(out) && !isinf(out);
+    }
+    return false;
+}
+
 static bool threshold_exceeded() {
     auto chg = [](float prev, float curr, float thr) -> bool {
         if (prev < 0.0f) return curr >= 0.0f;   // erster empfangener Wert
@@ -59,27 +99,43 @@ static bool threshold_exceeded() {
 
 static void apply_telemetry_json(const char *json) {
     JsonDocument doc;
+    json = json_skip_bom(json);
     DeserializationError err = deserializeJson(doc, json);
     if (err) {
         Serial.printf("Telemetrie-JSON: %s\n", err.c_str());
         return;
     }
 
-    auto apply = [&](const char *key_a, const char *key_b, float &dest) {
-        if (!doc[key_a].isNull()) {
-            dest = doc[key_a].as<float>();
-            return;
+    JsonObjectConst root = telemetry_root(doc);
+    bool any_field = false;
+    float v;
+
+    auto apply2 = [&](const char *key_a, const char *key_b, float &dest) {
+        if (json_to_float(root[key_a], v) || (key_b && json_to_float(root[key_b], v))) {
+            dest      = v;
+            any_field = true;
         }
-        if (key_b && !doc[key_b].isNull()) dest = doc[key_b].as<float>();
     };
 
-    apply("soc", nullptr, victron.soc);
-    apply("voltage", "bat_v", victron.voltage);
-    apply("solar_w", "solarW", victron.solar_w);
-    apply("current_a", "batA", victron.current);
-    apply("load_w", "loadW", victron.load_w);
+    apply2("soc", nullptr, victron.soc);
+    apply2("voltage", "bat_v", victron.voltage);
+    {
+        static const char *const solar_keys[] = {
+            "solar_w", "solarW", "pv_power", "solar_power", "yield_power",
+            "ppv", "dc_pv_power", "mppt_power", nullptr,
+        };
+        for (const char *const *k = solar_keys; *k; k++) {
+            if (json_to_float(root[*k], v)) {
+                victron.solar_w = v;
+                any_field       = true;
+                break;
+            }
+        }
+    }
+    apply2("current_a", "batA", victron.current);
+    apply2("load_w", "loadW", victron.load_w);
 
-    if (threshold_exceeded()) full_refresh_needed = true;
+    if (any_field || threshold_exceeded()) full_refresh_needed = true;
 }
 
 static int8_t parse_relay_payload(char *s) {
@@ -145,11 +201,22 @@ static void mqtt_callback(char *topic, byte *payload, unsigned int len) {
 
     float val = atof(buf);
 
-    if (TOPIC_SOC[0] && strcmp(topic, TOPIC_SOC) == 0) victron.soc = val;
-    else if (TOPIC_VOLTAGE[0] && strcmp(topic, TOPIC_VOLTAGE) == 0) victron.voltage = val;
-    else if (TOPIC_CURRENT[0] && strcmp(topic, TOPIC_CURRENT) == 0) victron.current = val;
-    else if (TOPIC_SOLAR_POWER[0] && strcmp(topic, TOPIC_SOLAR_POWER) == 0) victron.solar_w = val;
-    else if (TOPIC_LOAD_POWER[0] && strcmp(topic, TOPIC_LOAD_POWER) == 0) victron.load_w = val;
+    if (TOPIC_SOC[0] && strcmp(topic, TOPIC_SOC) == 0) {
+        victron.soc = val;
+        if (threshold_exceeded()) full_refresh_needed = true;
+    } else if (TOPIC_VOLTAGE[0] && strcmp(topic, TOPIC_VOLTAGE) == 0) {
+        victron.voltage = val;
+        if (threshold_exceeded()) full_refresh_needed = true;
+    } else if (TOPIC_CURRENT[0] && strcmp(topic, TOPIC_CURRENT) == 0) {
+        victron.current = val;
+        if (threshold_exceeded()) full_refresh_needed = true;
+    } else if (TOPIC_SOLAR_POWER[0] && strcmp(topic, TOPIC_SOLAR_POWER) == 0) {
+        victron.solar_w = val;
+        if (threshold_exceeded()) full_refresh_needed = true;
+    } else if (TOPIC_LOAD_POWER[0] && strcmp(topic, TOPIC_LOAD_POWER) == 0) {
+        victron.load_w = val;
+        if (threshold_exceeded()) full_refresh_needed = true;
+    }
     else if (TOPIC_TEMP_AUSSEN[0]  && strcmp(topic, TOPIC_TEMP_AUSSEN)  == 0) { victron.temp_aussen  = val; if (threshold_exceeded()) full_refresh_needed = true; }
     else if (TOPIC_TEMP_INNEN[0]   && strcmp(topic, TOPIC_TEMP_INNEN)   == 0) { victron.temp_innen   = val; if (threshold_exceeded()) full_refresh_needed = true; }
     else if (TOPIC_TEMP_FRIDGE[0]  && strcmp(topic, TOPIC_TEMP_FRIDGE)  == 0) { victron.temp_fridge  = val; if (threshold_exceeded()) full_refresh_needed = true; }
@@ -173,13 +240,12 @@ static bool mqtt_connect() {
         if (TOPIC_TELEMETRY_JSON[0]) {
             mqtt.subscribe(TOPIC_TELEMETRY_JSON);
             Serial.printf("MQTT: JSON-Telemetrie %s\n", TOPIC_TELEMETRY_JSON);
-        } else {
-            if (TOPIC_SOC[0]) mqtt.subscribe(TOPIC_SOC);
-            if (TOPIC_VOLTAGE[0]) mqtt.subscribe(TOPIC_VOLTAGE);
-            if (TOPIC_CURRENT[0]) mqtt.subscribe(TOPIC_CURRENT);
-            if (TOPIC_SOLAR_POWER[0]) mqtt.subscribe(TOPIC_SOLAR_POWER);
-            if (TOPIC_LOAD_POWER[0]) mqtt.subscribe(TOPIC_LOAD_POWER);
         }
+        if (TOPIC_SOC[0]) mqtt.subscribe(TOPIC_SOC);
+        if (TOPIC_VOLTAGE[0]) mqtt.subscribe(TOPIC_VOLTAGE);
+        if (TOPIC_CURRENT[0]) mqtt.subscribe(TOPIC_CURRENT);
+        if (TOPIC_SOLAR_POWER[0]) mqtt.subscribe(TOPIC_SOLAR_POWER);
+        if (TOPIC_LOAD_POWER[0]) mqtt.subscribe(TOPIC_LOAD_POWER);
         if (TOPIC_TEMP_AUSSEN[0])  mqtt.subscribe(TOPIC_TEMP_AUSSEN);
         if (TOPIC_TEMP_INNEN[0])   mqtt.subscribe(TOPIC_TEMP_INNEN);
         if (TOPIC_TEMP_FRIDGE[0])  mqtt.subscribe(TOPIC_TEMP_FRIDGE);
