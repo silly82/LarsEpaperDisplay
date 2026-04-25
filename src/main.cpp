@@ -3,6 +3,7 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <Button2.h>
+#include <ArduinoJson.h>
 #include <epd_driver.h>
 #include <string.h>
 #include <ctype.h>
@@ -33,9 +34,37 @@ static uint32_t     last_data_ms  = 0;
 static uint32_t     last_ghost_ms = 0;
 static bool         full_refresh_needed = true;
 
+static char         mqtt_json_buf[768];
+
 // ─────────────────────────────────────────────────────────────────────────────
 // MQTT
 // ─────────────────────────────────────────────────────────────────────────────
+
+static void apply_telemetry_json(const char *json) {
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, json);
+    if (err) {
+        Serial.printf("Telemetrie-JSON: %s\n", err.c_str());
+        return;
+    }
+
+    auto apply = [&](const char *key_a, const char *key_b, float &dest) {
+        if (!doc[key_a].isNull()) {
+            dest = doc[key_a].as<float>();
+            return;
+        }
+        if (key_b && !doc[key_b].isNull()) dest = doc[key_b].as<float>();
+    };
+
+    apply("soc", nullptr, victron.soc);
+    apply("voltage", "bat_v", victron.voltage);
+    apply("solar_w", "solarW", victron.solar_w);
+    apply("current_a", "batA", victron.current);
+    apply("load_w", "loadW", victron.load_w);
+    apply("temp_c", "batTemp", victron.temp);
+
+    full_refresh_needed = true;
+}
 
 static int8_t parse_relay_payload(char *s) {
     // trim
@@ -85,6 +114,17 @@ static void mqtt_callback(char *topic, byte *payload, unsigned int len) {
         return;
     }
 
+    if (TOPIC_TELEMETRY_JSON[0] && strcmp(topic, TOPIC_TELEMETRY_JSON) == 0) {
+        if (len >= sizeof(mqtt_json_buf)) {
+            Serial.printf("MQTT JSON zu lang: %u\n", (unsigned)len);
+            return;
+        }
+        memcpy(mqtt_json_buf, payload, len);
+        mqtt_json_buf[len] = '\0';
+        apply_telemetry_json(mqtt_json_buf);
+        return;
+    }
+
     float val = atof(buf);
 
     if (TOPIC_SOC[0] && strcmp(topic, TOPIC_SOC) == 0) victron.soc = val;
@@ -98,6 +138,7 @@ static void mqtt_callback(char *topic, byte *payload, unsigned int len) {
 static bool mqtt_connect() {
     mqtt.setServer(cfg.mqtt_host.c_str(), cfg.mqtt_port);
     mqtt.setCallback(mqtt_callback);
+    mqtt.setBufferSize(1024);
 
     bool ok;
     if (cfg.mqtt_user.length() > 0) {
@@ -108,12 +149,17 @@ static bool mqtt_connect() {
     }
 
     if (ok) {
-        if (TOPIC_SOC[0]) mqtt.subscribe(TOPIC_SOC);
-        if (TOPIC_VOLTAGE[0]) mqtt.subscribe(TOPIC_VOLTAGE);
-        if (TOPIC_CURRENT[0]) mqtt.subscribe(TOPIC_CURRENT);
-        if (TOPIC_SOLAR_POWER[0]) mqtt.subscribe(TOPIC_SOLAR_POWER);
-        if (TOPIC_LOAD_POWER[0]) mqtt.subscribe(TOPIC_LOAD_POWER);
-        if (TOPIC_TEMP[0]) mqtt.subscribe(TOPIC_TEMP);
+        if (TOPIC_TELEMETRY_JSON[0]) {
+            mqtt.subscribe(TOPIC_TELEMETRY_JSON);
+            Serial.printf("MQTT: JSON-Telemetrie %s\n", TOPIC_TELEMETRY_JSON);
+        } else {
+            if (TOPIC_SOC[0]) mqtt.subscribe(TOPIC_SOC);
+            if (TOPIC_VOLTAGE[0]) mqtt.subscribe(TOPIC_VOLTAGE);
+            if (TOPIC_CURRENT[0]) mqtt.subscribe(TOPIC_CURRENT);
+            if (TOPIC_SOLAR_POWER[0]) mqtt.subscribe(TOPIC_SOLAR_POWER);
+            if (TOPIC_LOAD_POWER[0]) mqtt.subscribe(TOPIC_LOAD_POWER);
+            if (TOPIC_TEMP[0]) mqtt.subscribe(TOPIC_TEMP);
+        }
         if (TOPIC_RELAY1_STATE[0]) mqtt.subscribe(TOPIC_RELAY1_STATE);
         if (TOPIC_RELAY2_STATE[0]) mqtt.subscribe(TOPIC_RELAY2_STATE);
         if (TOPIC_RELAY3_STATE[0]) mqtt.subscribe(TOPIC_RELAY3_STATE);

@@ -88,6 +88,25 @@ flowchart LR
 
 ---
 
+## Firmware-Zweig `feature/mqtt-json-telemetry`
+
+Auf diesem Branch abonniert das Display **direkt** `TOPIC_TELEMETRY_JSON` (Standard: `camping/telemetry/mppt`) und parst **ein JSON-Objekt** pro Nachricht. Die flachen Topics `lars/mppt/soc` usw. werden dann **nicht** mehr abonniert (Rückfall: `TOPIC_TELEMETRY_JSON` in `config.h` auf `""` setzen).
+
+**Unterstützte Felder** (alle optional; fehlende Keys lassen den bisherigen Wert / „--“):
+
+| JSON-Schlüssel | Alternativ | → Anzeige |
+|----------------|------------|-----------|
+| `soc` | — | SOC % |
+| `voltage` | `bat_v` | Spannung V |
+| `solar_w` | `solarW` | Solar W |
+| `current_a` | `batA` | Strom A |
+| `load_w` | `loadW` | Last W |
+| `temp_c` | `batTemp` | °C |
+
+Max. Nutzlast ca. **767 Byte** (Puffer im Firmware-Callback). Nach gültigem JSON wird ein **Vollbild-Refresh** ausgelöst.
+
+---
+
 ## JSON → Display (Adapter)
 
 Die Firmware liest **kein** JSON auf `lars/mppt/*`. Der Adapter:

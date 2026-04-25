@@ -28,7 +28,12 @@
 #define MQTT_CLIENT_ID      "camping-epaper"   // muss im Broker eindeutig sein
 #define MQTT_PORT_DEFAULT   1883
 
-// MPPT-/Batterie-Werte: pro Topic Payload = reiner Float als ASCII (z. B. "78.5", "13.8", "25")
+// MPPT-/Batterie-Werte – zwei Modi (siehe main.cpp mqtt_connect):
+//   • TOPIC_TELEMETRY_JSON nicht leer: ein Topic, Payload = JSON-Objekt (UTF-8)
+//   • TOPIC_TELEMETRY_JSON leer: flache Topics unten, Payload = reiner Float als ASCII
+#define TOPIC_TELEMETRY_JSON  "camping/telemetry/mppt"
+
+// Flache Topics (nur aktiv, wenn TOPIC_TELEMETRY_JSON "")
 #define TOPIC_SOC           "lars/mppt/soc"      // SOC 0–100 [%]
 #define TOPIC_VOLTAGE       "lars/mppt/batV"     // Batteriespannung [V]
 #define TOPIC_SOLAR_POWER   "lars/mppt/solarW"   // Solarleistung [W]
