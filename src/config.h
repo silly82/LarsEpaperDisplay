@@ -38,12 +38,17 @@
 #define TOPIC_VOLTAGE       "lars/mppt/batV"     // Batteriespannung [V]
 #define TOPIC_SOLAR_POWER   "lars/mppt/solarW"   // Solarleistung [W]
 
-// Optional: Topic-String leer lassen "" → kein MQTT-Subscribe, Anzeige bleibt „--“
+// Optional: Topic-String leer lassen "" → kein MQTT-Subscribe, Anzeige bleibt „--"
 #define TOPIC_CURRENT       ""   // z. B. "lars/mppt/batA" – positiv=laden [A]
 #define TOPIC_LOAD_POWER    ""   // z. B. "lars/mppt/loadW" [W]
-#define TOPIC_TEMP          ""   // z. B. "lars/mppt/batTemp" [°C]
 
-// Relais-Befehle (Publish bei Menue „Relais n“ + Langdruck). Payload siehe unten.
+// Umgebungstemperaturen (Victron Temperature Sensor, node-red-contrib-victron)
+#define TOPIC_TEMP_AUSSEN   "camping/temp/aussen"
+#define TOPIC_TEMP_INNEN    "camping/temp/innen"
+#define TOPIC_TEMP_FRIDGE   "camping/temp/kuehlschrank"
+#define TOPIC_TEMP_CABINET  "camping/temp/geraeteschrank"
+
+// Relais-Befehle (Publish bei Menue „Relais n" + Langdruck). Payload siehe unten.
 // Leerer String = keine MQTT-Aktion fuer diesen Eintrag.
 #define TOPIC_RELAY1_CMD    "lars/relais/1/cmd"
 #define TOPIC_RELAY2_CMD    "lars/relais/2/cmd"
@@ -57,10 +62,19 @@
 
 // Unteres Menue: Anzahl Eintraege (Relais1–3 + Bild neu)
 #define MENU_ITEM_COUNT     4
-// Langdruck-Schwelle fuer „Auswaehlen“ [ms] (Button2 long-click detected)
+// Langdruck-Schwelle fuer „Auswaehlen" [ms] (Button2 long-click detected)
 #define MENU_LONG_PRESS_MS  900UL
 
 // ── Refresh-Timing ────────────────────────────────────────────
 // Nur Vollbild (epd_clear): Partial-Update fuer Messwerte entfaellt (Ghosting/Panel).
-#define DATA_REFRESH_INTERVAL_MS  45000UL   // Messwerte + Menue automatisch neu
-#define FULL_REFRESH_INTERVAL       300000UL  // zusaetzlicher Vollbild-Intervall (Geister)
+#define DATA_REFRESH_INTERVAL_MS  15000UL    // Minimaler Abstand zwischen Refreshes [ms]
+#define FULL_REFRESH_INTERVAL     300000UL   // Vollbild-Intervall gegen Geister [ms]
+
+// ── Schwellenwerte fuer Display-Refresh ───────────────────────
+// Refresh nur wenn sich mindestens ein Wert um diesen Betrag geaendert hat.
+#define DISPLAY_THRESHOLD_SOC    5.0f   // %
+#define DISPLAY_THRESHOLD_VOLT   0.5f   // V
+#define DISPLAY_THRESHOLD_CURR   0.5f   // A
+#define DISPLAY_THRESHOLD_SOLAR  5.0f   // W
+#define DISPLAY_THRESHOLD_LOAD   5.0f   // W
+#define DISPLAY_THRESHOLD_TEMP   0.5f   // °C

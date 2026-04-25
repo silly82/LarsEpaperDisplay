@@ -18,6 +18,7 @@
 
 static AppConfig    cfg;
 static VictronData  victron;
+static VictronData  last_shown;   // Snapshot des zuletzt angezeigten Zustands
 static char         ip_str[20]  = "--";
 
 static WiFiClient   wifiClient;
@@ -40,6 +41,22 @@ static char         mqtt_json_buf[768];
 // MQTT
 // ─────────────────────────────────────────────────────────────────────────────
 
+static bool threshold_exceeded() {
+    auto chg = [](float prev, float curr, float thr) -> bool {
+        if (prev < 0.0f) return curr >= 0.0f;   // erster empfangener Wert
+        return fabsf(curr - prev) >= thr;
+    };
+    return chg(last_shown.soc,          victron.soc,          DISPLAY_THRESHOLD_SOC)
+        || chg(last_shown.voltage,      victron.voltage,      DISPLAY_THRESHOLD_VOLT)
+        || chg(last_shown.current,      victron.current,      DISPLAY_THRESHOLD_CURR)
+        || chg(last_shown.solar_w,      victron.solar_w,      DISPLAY_THRESHOLD_SOLAR)
+        || chg(last_shown.load_w,       victron.load_w,       DISPLAY_THRESHOLD_LOAD)
+        || chg(last_shown.temp_aussen,  victron.temp_aussen,  DISPLAY_THRESHOLD_TEMP)
+        || chg(last_shown.temp_innen,   victron.temp_innen,   DISPLAY_THRESHOLD_TEMP)
+        || chg(last_shown.temp_fridge,  victron.temp_fridge,  DISPLAY_THRESHOLD_TEMP)
+        || chg(last_shown.temp_cabinet, victron.temp_cabinet, DISPLAY_THRESHOLD_TEMP);
+}
+
 static void apply_telemetry_json(const char *json) {
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, json);
@@ -61,9 +78,8 @@ static void apply_telemetry_json(const char *json) {
     apply("solar_w", "solarW", victron.solar_w);
     apply("current_a", "batA", victron.current);
     apply("load_w", "loadW", victron.load_w);
-    apply("temp_c", "batTemp", victron.temp);
 
-    full_refresh_needed = true;
+    if (threshold_exceeded()) full_refresh_needed = true;
 }
 
 static int8_t parse_relay_payload(char *s) {
@@ -93,6 +109,19 @@ static int8_t parse_relay_payload(char *s) {
 }
 
 static void mqtt_callback(char *topic, byte *payload, unsigned int len) {
+    // JSON-Telemetrie zuerst: grosser Payload, eigener Puffer
+    if (TOPIC_TELEMETRY_JSON[0] && strcmp(topic, TOPIC_TELEMETRY_JSON) == 0) {
+        if (len >= sizeof(mqtt_json_buf)) {
+            Serial.printf("MQTT JSON zu lang: %u\n", (unsigned)len);
+            return;
+        }
+        memcpy(mqtt_json_buf, payload, len);
+        mqtt_json_buf[len] = '\0';
+        apply_telemetry_json(mqtt_json_buf);
+        return;
+    }
+
+    // Alle anderen Topics haben kurze Payloads (relay state, flat metrics)
     char buf[32];
     if (len >= sizeof(buf)) return;
     memcpy(buf, payload, len);
@@ -114,17 +143,6 @@ static void mqtt_callback(char *topic, byte *payload, unsigned int len) {
         return;
     }
 
-    if (TOPIC_TELEMETRY_JSON[0] && strcmp(topic, TOPIC_TELEMETRY_JSON) == 0) {
-        if (len >= sizeof(mqtt_json_buf)) {
-            Serial.printf("MQTT JSON zu lang: %u\n", (unsigned)len);
-            return;
-        }
-        memcpy(mqtt_json_buf, payload, len);
-        mqtt_json_buf[len] = '\0';
-        apply_telemetry_json(mqtt_json_buf);
-        return;
-    }
-
     float val = atof(buf);
 
     if (TOPIC_SOC[0] && strcmp(topic, TOPIC_SOC) == 0) victron.soc = val;
@@ -132,7 +150,10 @@ static void mqtt_callback(char *topic, byte *payload, unsigned int len) {
     else if (TOPIC_CURRENT[0] && strcmp(topic, TOPIC_CURRENT) == 0) victron.current = val;
     else if (TOPIC_SOLAR_POWER[0] && strcmp(topic, TOPIC_SOLAR_POWER) == 0) victron.solar_w = val;
     else if (TOPIC_LOAD_POWER[0] && strcmp(topic, TOPIC_LOAD_POWER) == 0) victron.load_w = val;
-    else if (TOPIC_TEMP[0] && strcmp(topic, TOPIC_TEMP) == 0) victron.temp = val;
+    else if (TOPIC_TEMP_AUSSEN[0]  && strcmp(topic, TOPIC_TEMP_AUSSEN)  == 0) { victron.temp_aussen  = val; if (threshold_exceeded()) full_refresh_needed = true; }
+    else if (TOPIC_TEMP_INNEN[0]   && strcmp(topic, TOPIC_TEMP_INNEN)   == 0) { victron.temp_innen   = val; if (threshold_exceeded()) full_refresh_needed = true; }
+    else if (TOPIC_TEMP_FRIDGE[0]  && strcmp(topic, TOPIC_TEMP_FRIDGE)  == 0) { victron.temp_fridge  = val; if (threshold_exceeded()) full_refresh_needed = true; }
+    else if (TOPIC_TEMP_CABINET[0] && strcmp(topic, TOPIC_TEMP_CABINET) == 0) { victron.temp_cabinet = val; if (threshold_exceeded()) full_refresh_needed = true; }
 }
 
 static bool mqtt_connect() {
@@ -158,8 +179,11 @@ static bool mqtt_connect() {
             if (TOPIC_CURRENT[0]) mqtt.subscribe(TOPIC_CURRENT);
             if (TOPIC_SOLAR_POWER[0]) mqtt.subscribe(TOPIC_SOLAR_POWER);
             if (TOPIC_LOAD_POWER[0]) mqtt.subscribe(TOPIC_LOAD_POWER);
-            if (TOPIC_TEMP[0]) mqtt.subscribe(TOPIC_TEMP);
         }
+        if (TOPIC_TEMP_AUSSEN[0])  mqtt.subscribe(TOPIC_TEMP_AUSSEN);
+        if (TOPIC_TEMP_INNEN[0])   mqtt.subscribe(TOPIC_TEMP_INNEN);
+        if (TOPIC_TEMP_FRIDGE[0])  mqtt.subscribe(TOPIC_TEMP_FRIDGE);
+        if (TOPIC_TEMP_CABINET[0]) mqtt.subscribe(TOPIC_TEMP_CABINET);
         if (TOPIC_RELAY1_STATE[0]) mqtt.subscribe(TOPIC_RELAY1_STATE);
         if (TOPIC_RELAY2_STATE[0]) mqtt.subscribe(TOPIC_RELAY2_STATE);
         if (TOPIC_RELAY3_STATE[0]) mqtt.subscribe(TOPIC_RELAY3_STATE);
@@ -286,16 +310,18 @@ void loop() {
     }
     mqtt.loop();
 
-    uint32_t now      = millis();
-    bool     mqtt_ok  = mqtt.connected();
-    bool     data_due = (now - last_data_ms >= DATA_REFRESH_INTERVAL_MS);
+    uint32_t now       = millis();
+    bool     mqtt_ok   = mqtt.connected();
     bool     ghost_due = (now - last_ghost_ms >= FULL_REFRESH_INTERVAL);
+    // Gate offen wenn: noch nie Daten angezeigt ODER Mindestabstand abgelaufen
+    bool     gate_open = (last_shown.soc < 0.0f) || (now - last_data_ms >= DATA_REFRESH_INTERVAL_MS);
 
-    bool do_full = full_refresh_needed || data_due || ghost_due;
+    bool do_full = (full_refresh_needed && gate_open) || ghost_due;
     if (do_full) {
         display_full_refresh(victron, mqtt_ok, ip_str, menu_sel, relay_state);
+        last_shown   = victron;
         last_data_ms = now;
-        if (ghost_due || full_refresh_needed) last_ghost_ms = now;
+        if (ghost_due) last_ghost_ms = now;
         full_refresh_needed = false;
         menu_strip_dirty = false;
     } else if (menu_strip_dirty) {

@@ -4,7 +4,7 @@
     "type": "tab",
     "label": "Camping Display MQTT",
     "disabled": false,
-    "info": "Adapter: JSON-Telemetrie → lars/mppt/* · Relais cmd-Beispiel\nSiehe NODE_RED.md"
+    "info": "Wenn ESP ohne natives JSON: Adapter JSON → lars/mppt/*. Sonst Gruppe A aus. Relais-Beispiel · Victron Direct. Siehe NODE_RED.md"
   },
   {
     "id": "camp_broker",
@@ -30,11 +30,12 @@
     "willRetain": "false",
     "willPayload": ""
   },
+
   {
     "id": "camp_c_a1",
     "type": "group",
     "z": "camp_tab_main",
-    "name": "A · Telemetry JSON → Display",
+    "name": "A · Telemetry JSON → Display  (deaktivieren wenn Gruppe C aktiv)",
     "style": { "label": true },
     "nodes": [
       "camp_mqtt_in_tel",
@@ -136,11 +137,12 @@
     "y": 200,
     "wires": [["camp_fn_adapter"]]
   },
+
   {
     "id": "camp_c_b1",
     "type": "group",
     "z": "camp_tab_main",
-    "name": "B · Relais cmd (Beispiel)",
+    "name": "B · Relais cmd (Beispiel — deaktivieren wenn Gruppe E aktiv)",
     "style": { "label": true },
     "nodes": ["camp_mqtt_in_relay", "camp_fn_relay", "camp_dbg_relay", "camp_mqtt_out_state", "camp_cmt_b1"],
     "x": 34,
@@ -228,6 +230,679 @@
     "broker": "camp_broker",
     "x": 660,
     "y": 400,
+    "wires": []
+  },
+
+  {
+    "id": "camp_c_d1",
+    "type": "group",
+    "z": "camp_tab_main",
+    "name": "D · Victron Temperature Sensors → camping/temp/*",
+    "style": { "label": true },
+    "nodes": [
+      "camp_cmt_d1",
+      "camp_vic_t_aus",  "camp_chg_t_aus",
+      "camp_vic_t_inn",  "camp_chg_t_inn",
+      "camp_vic_t_kuehl","camp_chg_t_kuehl",
+      "camp_vic_t_ger",  "camp_chg_t_ger",
+      "camp_vic_t_out"
+    ],
+    "x": 34,
+    "y": 960,
+    "w": 820,
+    "h": 380
+  },
+  {
+    "id": "camp_cmt_d1",
+    "type": "comment",
+    "z": "camp_tab_main",
+    "g": "camp_c_d1",
+    "name": "Jeden Node öffnen → Gerät (Service) aus Dropdown wählen. Pfad /Temperature ist voreingestellt.",
+    "info": "Instanz-Nummern:\n  Aussen [20] · Innen [22] · Kühlschrank [21] · Geräteschrank [24]\n\nTopics:\n  camping/temp/aussen\n  camping/temp/innen\n  camping/temp/kuehlschrank\n  camping/temp/geraeteschrank",
+    "x": 100,
+    "y": 980,
+    "wires": []
+  },
+
+  {
+    "id": "camp_vic_t_aus",
+    "type": "victron-input-temperature",
+    "z": "camp_tab_main",
+    "g": "camp_c_d1",
+    "service": "",
+    "path": "/Temperature",
+    "serviceObj": null,
+    "pathObj": {"path": "/Temperature", "type": "float", "name": "Temperature (°C)"},
+    "name": "Aussen [20]",
+    "onlyChanges": true,
+    "roundValues": "1",
+    "x": 160,
+    "y": 1040,
+    "wires": [["camp_chg_t_aus"]]
+  },
+  {
+    "id": "camp_chg_t_aus",
+    "type": "change",
+    "z": "camp_tab_main",
+    "g": "camp_c_d1",
+    "name": "→ camping/temp/aussen",
+    "rules": [
+      {"t": "set", "p": "topic",   "pt": "msg", "to": "camping/temp/aussen", "tot": "str"},
+      {"t": "set", "p": "payload", "pt": "msg", "to": "$string(payload)",     "tot": "jsonata"}
+    ],
+    "x": 390,
+    "y": 1040,
+    "wires": [["camp_vic_t_out"]]
+  },
+
+  {
+    "id": "camp_vic_t_inn",
+    "type": "victron-input-temperature",
+    "z": "camp_tab_main",
+    "g": "camp_c_d1",
+    "service": "",
+    "path": "/Temperature",
+    "serviceObj": null,
+    "pathObj": {"path": "/Temperature", "type": "float", "name": "Temperature (°C)"},
+    "name": "Innen [22]",
+    "onlyChanges": true,
+    "roundValues": "1",
+    "x": 160,
+    "y": 1100,
+    "wires": [["camp_chg_t_inn"]]
+  },
+  {
+    "id": "camp_chg_t_inn",
+    "type": "change",
+    "z": "camp_tab_main",
+    "g": "camp_c_d1",
+    "name": "→ camping/temp/innen",
+    "rules": [
+      {"t": "set", "p": "topic",   "pt": "msg", "to": "camping/temp/innen", "tot": "str"},
+      {"t": "set", "p": "payload", "pt": "msg", "to": "$string(payload)",   "tot": "jsonata"}
+    ],
+    "x": 390,
+    "y": 1100,
+    "wires": [["camp_vic_t_out"]]
+  },
+
+  {
+    "id": "camp_vic_t_kuehl",
+    "type": "victron-input-temperature",
+    "z": "camp_tab_main",
+    "g": "camp_c_d1",
+    "service": "",
+    "path": "/Temperature",
+    "serviceObj": null,
+    "pathObj": {"path": "/Temperature", "type": "float", "name": "Temperature (°C)"},
+    "name": "Kuehlschrank [21]",
+    "onlyChanges": true,
+    "roundValues": "1",
+    "x": 160,
+    "y": 1160,
+    "wires": [["camp_chg_t_kuehl"]]
+  },
+  {
+    "id": "camp_chg_t_kuehl",
+    "type": "change",
+    "z": "camp_tab_main",
+    "g": "camp_c_d1",
+    "name": "→ camping/temp/kuehlschrank",
+    "rules": [
+      {"t": "set", "p": "topic",   "pt": "msg", "to": "camping/temp/kuehlschrank", "tot": "str"},
+      {"t": "set", "p": "payload", "pt": "msg", "to": "$string(payload)",           "tot": "jsonata"}
+    ],
+    "x": 390,
+    "y": 1160,
+    "wires": [["camp_vic_t_out"]]
+  },
+
+  {
+    "id": "camp_vic_t_ger",
+    "type": "victron-input-temperature",
+    "z": "camp_tab_main",
+    "g": "camp_c_d1",
+    "service": "",
+    "path": "/Temperature",
+    "serviceObj": null,
+    "pathObj": {"path": "/Temperature", "type": "float", "name": "Temperature (°C)"},
+    "name": "Geraeteschrank [24]",
+    "onlyChanges": true,
+    "roundValues": "1",
+    "x": 160,
+    "y": 1220,
+    "wires": [["camp_chg_t_ger"]]
+  },
+  {
+    "id": "camp_chg_t_ger",
+    "type": "change",
+    "z": "camp_tab_main",
+    "g": "camp_c_d1",
+    "name": "→ camping/temp/geraeteschrank",
+    "rules": [
+      {"t": "set", "p": "topic",   "pt": "msg", "to": "camping/temp/geraeteschrank", "tot": "str"},
+      {"t": "set", "p": "payload", "pt": "msg", "to": "$string(payload)",              "tot": "jsonata"}
+    ],
+    "x": 390,
+    "y": 1220,
+    "wires": [["camp_vic_t_out"]]
+  },
+
+  {
+    "id": "camp_vic_t_out",
+    "type": "mqtt out",
+    "z": "camp_tab_main",
+    "g": "camp_c_d1",
+    "name": "→ Display Broker",
+    "topic": "",
+    "qos": "1",
+    "retain": "true",
+    "respTopic": "",
+    "contentType": "",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "camp_broker",
+    "x": 640,
+    "y": 1130,
+    "wires": []
+  },
+
+  {
+    "id": "camp_c_e1",
+    "type": "group",
+    "z": "camp_tab_main",
+    "name": "E · Victron Relay Direct (Cerbo GX) — Gruppe B deaktivieren",
+    "style": { "label": true },
+    "nodes": [
+      "camp_cmt_e1",
+      "camp_vic_r1_state", "camp_fn_r1_state", "camp_vic_r1_out",
+      "camp_mqtt_r1_cmd",  "camp_fn_r1_cmd",   "camp_vic_r1_write",
+      "camp_vic_r2_state", "camp_fn_r2_state", "camp_vic_r2_out",
+      "camp_mqtt_r2_cmd",  "camp_fn_r2_cmd",   "camp_vic_r2_write"
+    ],
+    "x": 34,
+    "y": 710,
+    "w": 840,
+    "h": 440
+  },
+  {
+    "id": "camp_cmt_e1",
+    "type": "comment",
+    "z": "camp_tab_main",
+    "g": "camp_c_e1",
+    "name": "Victron-Relais lesen/schreiben via D-Bus. Service ist bereits 'Venus device' voreingestellt.",
+    "info": "Input:  victron-input-relay  /Relay/0/State (R1), /Relay/1/State (R2)\nOutput: victron-output-relay  gleiche Pfade\nPayload: 0 = Open, 1 = Closed",
+    "x": 100,
+    "y": 730,
+    "wires": []
+  },
+
+  {
+    "id": "camp_vic_r1_state",
+    "type": "victron-input-relay",
+    "z": "camp_tab_main",
+    "g": "camp_c_e1",
+    "service": "com.victronenergy.system/0",
+    "path": "/Relay/0/State",
+    "serviceObj": {
+      "service": "com.victronenergy.system/0",
+      "name": "Venus system",
+      "communityTag": "relay"
+    },
+    "pathObj": {
+      "path": "/Relay/0/State",
+      "type": "enum",
+      "name": "Venus relay 1 state",
+      "enum": { "0": "Open", "1": "Closed" },
+      "mode": "both"
+    },
+    "name": "Relay 1 State",
+    "onlyChanges": false,
+    "conditionalMode": false,
+    "outputTrue": "",
+    "outputFalse": "",
+    "debounce": "",
+    "x": 150,
+    "y": 790,
+    "wires": [["camp_fn_r1_state"]]
+  },
+  {
+    "id": "camp_fn_r1_state",
+    "type": "function",
+    "z": "camp_tab_main",
+    "g": "camp_c_e1",
+    "name": "Victron→state R1",
+    "func": "flow.set('relay_vic_1', msg.payload === 1);\nmsg.topic   = 'lars/relais/1/state';\nmsg.payload = msg.payload === 1 ? 'on' : 'off';\nmsg.qos     = 1;\nmsg.retain  = true;\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 370,
+    "y": 790,
+    "wires": [["camp_vic_r1_out"]]
+  },
+  {
+    "id": "camp_vic_r1_out",
+    "type": "mqtt out",
+    "z": "camp_tab_main",
+    "g": "camp_c_e1",
+    "name": "state R1 → Display",
+    "topic": "",
+    "qos": "1",
+    "retain": "true",
+    "respTopic": "",
+    "contentType": "",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "camp_broker",
+    "x": 620,
+    "y": 790,
+    "wires": []
+  },
+  {
+    "id": "camp_mqtt_r1_cmd",
+    "type": "mqtt in",
+    "z": "camp_tab_main",
+    "g": "camp_c_e1",
+    "name": "cmd R1",
+    "topic": "lars/relais/1/cmd",
+    "qos": "1",
+    "datatype": "utf8",
+    "broker": "camp_broker",
+    "nl": false,
+    "rap": false,
+    "rh": 0,
+    "inputs": 0,
+    "x": 150,
+    "y": 860,
+    "wires": [["camp_fn_r1_cmd"]]
+  },
+  {
+    "id": "camp_fn_r1_cmd",
+    "type": "function",
+    "z": "camp_tab_main",
+    "g": "camp_c_e1",
+    "name": "Toggle/on/off → 0/1  R1",
+    "func": "const cmd = (msg.payload || '').toString().toLowerCase().trim();\nconst cur  = flow.get('relay_vic_1') || false;\nconst next = cmd === 'toggle' ? !cur\n           : (cmd === '1' || cmd === 'on' || cmd === 'an' || cmd === 'true');\nmsg.payload = next ? 1 : 0;\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 390,
+    "y": 860,
+    "wires": [["camp_vic_r1_write"]]
+  },
+  {
+    "id": "camp_vic_r1_write",
+    "type": "victron-output-relay",
+    "z": "camp_tab_main",
+    "g": "camp_c_e1",
+    "service": "com.victronenergy.system/0",
+    "path": "/Relay/0/State",
+    "serviceObj": {
+      "service": "com.victronenergy.system/0",
+      "name": "Venus device"
+    },
+    "pathObj": {
+      "path": "/Relay/0/State",
+      "type": "enum",
+      "name": "Venus relay 1 state",
+      "enum": { "0": "Open", "1": "Closed" },
+      "mode": "both",
+      "disabled": false
+    },
+    "name": "Write Relay 1",
+    "onlyChanges": false,
+    "roundValues": "no",
+    "rateLimit": 0,
+    "conditionalMode": false,
+    "condition1Operator": ">",
+    "condition2Enabled": false,
+    "condition2Service": "",
+    "condition2Path": "",
+    "condition2Operator": ">",
+    "logicOperator": "AND",
+    "outputTrue": "true",
+    "outputFalse": "false",
+    "outputOnChange": false,
+    "debounce": 2000,
+    "x": 650,
+    "y": 860,
+    "wires": []
+  },
+
+  {
+    "id": "camp_vic_r2_state",
+    "type": "victron-input-relay",
+    "z": "camp_tab_main",
+    "g": "camp_c_e1",
+    "service": "com.victronenergy.system/0",
+    "path": "/Relay/1/State",
+    "serviceObj": {
+      "service": "com.victronenergy.system/0",
+      "name": "Venus system",
+      "communityTag": "relay"
+    },
+    "pathObj": {
+      "path": "/Relay/1/State",
+      "type": "enum",
+      "name": "Venus relay 2 state",
+      "enum": { "0": "Open", "1": "Closed" },
+      "mode": "both"
+    },
+    "name": "Relay 2 State",
+    "onlyChanges": false,
+    "conditionalMode": false,
+    "outputTrue": "",
+    "outputFalse": "",
+    "debounce": "",
+    "x": 150,
+    "y": 960,
+    "wires": [["camp_fn_r2_state"]]
+  },
+  {
+    "id": "camp_fn_r2_state",
+    "type": "function",
+    "z": "camp_tab_main",
+    "g": "camp_c_e1",
+    "name": "Victron→state R2",
+    "func": "flow.set('relay_vic_2', msg.payload === 1);\nmsg.topic   = 'lars/relais/2/state';\nmsg.payload = msg.payload === 1 ? 'on' : 'off';\nmsg.qos     = 1;\nmsg.retain  = true;\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 370,
+    "y": 960,
+    "wires": [["camp_vic_r2_out"]]
+  },
+  {
+    "id": "camp_vic_r2_out",
+    "type": "mqtt out",
+    "z": "camp_tab_main",
+    "g": "camp_c_e1",
+    "name": "state R2 → Display",
+    "topic": "",
+    "qos": "1",
+    "retain": "true",
+    "respTopic": "",
+    "contentType": "",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "camp_broker",
+    "x": 620,
+    "y": 960,
+    "wires": []
+  },
+  {
+    "id": "camp_mqtt_r2_cmd",
+    "type": "mqtt in",
+    "z": "camp_tab_main",
+    "g": "camp_c_e1",
+    "name": "cmd R2",
+    "topic": "lars/relais/2/cmd",
+    "qos": "1",
+    "datatype": "utf8",
+    "broker": "camp_broker",
+    "nl": false,
+    "rap": false,
+    "rh": 0,
+    "inputs": 0,
+    "x": 150,
+    "y": 1030,
+    "wires": [["camp_fn_r2_cmd"]]
+  },
+  {
+    "id": "camp_fn_r2_cmd",
+    "type": "function",
+    "z": "camp_tab_main",
+    "g": "camp_c_e1",
+    "name": "Toggle/on/off → 0/1  R2",
+    "func": "const cmd = (msg.payload || '').toString().toLowerCase().trim();\nconst cur  = flow.get('relay_vic_2') || false;\nconst next = cmd === 'toggle' ? !cur\n           : (cmd === '1' || cmd === 'on' || cmd === 'an' || cmd === 'true');\nmsg.payload = next ? 1 : 0;\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 390,
+    "y": 1030,
+    "wires": [["camp_vic_r2_write"]]
+  },
+  {
+    "id": "camp_vic_r2_write",
+    "type": "victron-output-relay",
+    "z": "camp_tab_main",
+    "g": "camp_c_e1",
+    "service": "com.victronenergy.system/0",
+    "path": "/Relay/1/State",
+    "serviceObj": {
+      "service": "com.victronenergy.system/0",
+      "name": "Venus device"
+    },
+    "pathObj": {
+      "path": "/Relay/1/State",
+      "type": "enum",
+      "name": "Venus relay 2 state",
+      "enum": { "0": "Open", "1": "Closed" },
+      "mode": "both",
+      "disabled": false
+    },
+    "name": "Write Relay 2",
+    "onlyChanges": false,
+    "roundValues": "no",
+    "rateLimit": 0,
+    "conditionalMode": false,
+    "condition1Operator": ">",
+    "condition2Enabled": false,
+    "condition2Service": "",
+    "condition2Path": "",
+    "condition2Operator": ">",
+    "logicOperator": "AND",
+    "outputTrue": "true",
+    "outputFalse": "false",
+    "outputOnChange": false,
+    "debounce": 2000,
+    "x": 650,
+    "y": 1030,
+    "wires": []
+  },
+
+  {
+    "id": "camp_c_c1",
+    "type": "group",
+    "z": "camp_tab_main",
+    "name": "C · Victron MPPT → JSON → camping/telemetry/mppt  (Gruppe A deaktivieren)",
+    "style": { "label": true },
+    "nodes": [
+      "camp_cmt_c1",
+      "camp_vic_soc",   "camp_chg_soc",
+      "camp_vic_volt",  "camp_chg_volt",
+      "camp_vic_solar", "camp_chg_solar",
+      "camp_vic_curr",  "camp_chg_curr",
+      "camp_fn_mppt_agg",
+      "camp_vic_out"
+    ],
+    "x": 34,
+    "y": 500,
+    "w": 860,
+    "h": 380
+  },
+  {
+    "id": "camp_cmt_c1",
+    "type": "comment",
+    "z": "camp_tab_main",
+    "g": "camp_c_c1",
+    "name": "Jeden victron-input-* Node oeffnen → Service (Gerät) waehlen. Aggregator baut JSON, Gruppe A deaktivieren.",
+    "info": "Jede Messung landet per Change-Node mit msg.field-Tag im Aggregator.\nDer Aggregator speichert Werte im Flow-Context und publiziert bei jeder Aenderung\nein vollstaendiges JSON auf camping/telemetry/mppt.\n\nDie Firmware (feature/mqtt-json-telemetry) liest dieses Topic direkt.",
+    "x": 120,
+    "y": 520,
+    "wires": []
+  },
+
+  {
+    "id": "camp_vic_soc",
+    "type": "victron-input-battery",
+    "z": "camp_tab_main",
+    "g": "camp_c_c1",
+    "service": "",
+    "path": "/Soc",
+    "serviceObj": null,
+    "pathObj": {"path": "/Soc", "type": "float", "name": "State of charge (%)"},
+    "name": "SOC %",
+    "onlyChanges": true,
+    "roundValues": "1",
+    "x": 160,
+    "y": 580,
+    "wires": [["camp_chg_soc"]]
+  },
+  {
+    "id": "camp_chg_soc",
+    "type": "change",
+    "z": "camp_tab_main",
+    "g": "camp_c_c1",
+    "name": "field=soc",
+    "rules": [
+      {"t": "set", "p": "field", "pt": "msg", "to": "soc", "tot": "str"}
+    ],
+    "x": 350,
+    "y": 580,
+    "wires": [["camp_fn_mppt_agg"]]
+  },
+
+  {
+    "id": "camp_vic_volt",
+    "type": "victron-input-battery",
+    "z": "camp_tab_main",
+    "g": "camp_c_c1",
+    "service": "",
+    "path": "/Dc/0/Voltage",
+    "serviceObj": null,
+    "pathObj": {"path": "/Dc/0/Voltage", "type": "float", "name": "Voltage (V)"},
+    "name": "Spannung V",
+    "onlyChanges": true,
+    "roundValues": "2",
+    "x": 160,
+    "y": 630,
+    "wires": [["camp_chg_volt"]]
+  },
+  {
+    "id": "camp_chg_volt",
+    "type": "change",
+    "z": "camp_tab_main",
+    "g": "camp_c_c1",
+    "name": "field=voltage",
+    "rules": [
+      {"t": "set", "p": "field", "pt": "msg", "to": "voltage", "tot": "str"}
+    ],
+    "x": 350,
+    "y": 630,
+    "wires": [["camp_fn_mppt_agg"]]
+  },
+
+  {
+    "id": "camp_vic_solar",
+    "type": "victron-input-solarcharger",
+    "z": "camp_tab_main",
+    "g": "camp_c_c1",
+    "service": "",
+    "path": "/Yield/Power",
+    "serviceObj": null,
+    "pathObj": {"path": "/Yield/Power", "type": "float", "name": "Solar yield power (W)"},
+    "name": "Solar W",
+    "onlyChanges": true,
+    "roundValues": "0",
+    "x": 160,
+    "y": 680,
+    "wires": [["camp_chg_solar"]]
+  },
+  {
+    "id": "camp_chg_solar",
+    "type": "change",
+    "z": "camp_tab_main",
+    "g": "camp_c_c1",
+    "name": "field=solar_w",
+    "rules": [
+      {"t": "set", "p": "field", "pt": "msg", "to": "solar_w", "tot": "str"}
+    ],
+    "x": 350,
+    "y": 680,
+    "wires": [["camp_fn_mppt_agg"]]
+  },
+
+  {
+    "id": "camp_vic_curr",
+    "type": "victron-input-battery",
+    "z": "camp_tab_main",
+    "g": "camp_c_c1",
+    "service": "",
+    "path": "/Dc/0/Current",
+    "serviceObj": null,
+    "pathObj": {"path": "/Dc/0/Current", "type": "float", "name": "Current (A)"},
+    "name": "Strom A",
+    "onlyChanges": true,
+    "roundValues": "1",
+    "x": 160,
+    "y": 730,
+    "wires": [["camp_chg_curr"]]
+  },
+  {
+    "id": "camp_chg_curr",
+    "type": "change",
+    "z": "camp_tab_main",
+    "g": "camp_c_c1",
+    "name": "field=current_a",
+    "rules": [
+      {"t": "set", "p": "field", "pt": "msg", "to": "current_a", "tot": "str"}
+    ],
+    "x": 350,
+    "y": 730,
+    "wires": [["camp_fn_mppt_agg"]]
+  },
+
+  {
+    "id": "camp_fn_mppt_agg",
+    "type": "function",
+    "z": "camp_tab_main",
+    "g": "camp_c_c1",
+    "name": "Aggregator → JSON",
+    "func": "flow.set('mppt_' + msg.field, msg.payload);\n\nconst j = {\n    schema: 'camping.telemetry.mppt.v1',\n    ts: new Date().toISOString()\n};\nfor (const f of ['soc', 'voltage', 'solar_w', 'current_a', 'load_w']) {\n    const v = flow.get('mppt_' + f);\n    if (v !== null && v !== undefined) j[f] = v;\n}\n\nmsg.topic   = 'camping/telemetry/mppt';\nmsg.payload = JSON.stringify(j);\nmsg.qos     = 0;\nmsg.retain  = false;\nreturn msg;",
+    "outputs": 1,
+    "timeout": 0,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 570,
+    "y": 655,
+    "wires": [["camp_vic_out"]]
+  },
+
+  {
+    "id": "camp_vic_out",
+    "type": "mqtt out",
+    "z": "camp_tab_main",
+    "g": "camp_c_c1",
+    "name": "→ camping/telemetry/mppt",
+    "topic": "camping/telemetry/mppt",
+    "qos": "0",
+    "retain": "false",
+    "respTopic": "",
+    "contentType": "",
+    "userProps": "",
+    "correl": "",
+    "expiry": "",
+    "broker": "camp_broker",
+    "x": 760,
+    "y": 655,
     "wires": []
   }
 ]

@@ -4,6 +4,7 @@
 #include <firasans.h>   // GFXfont FiraSans – liegt in LilyGo-EPD47/src/
 #include <string.h>
 #include <stdio.h>
+#include <esp_heap_caps.h>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Framebuffer
@@ -34,6 +35,53 @@ static void fb_clear_rect(int x, int y, int w, int h) {
 static void draw_text(const char *text, int x, int y) {
     int32_t cx = x, cy = y;
     writeln((GFXfont *)&FiraSans, text, &cx, &cy, fb);
+}
+
+// ── Kleiner Text (ca. halbe FiraSans-Größe via 2:1-Downscale) ────────────────
+// x = linker Rand, baseline_y = Baseline im Haupt-FB (wie draw_text).
+// Nur nicht-weisse Pixel werden geschrieben → mehrere Aufrufe überlappen nicht.
+static inline uint8_t px_get(const uint8_t *buf, int x, int y) {
+    uint32_t i = (uint32_t)y * (EPD_WIDTH / 2) + (uint32_t)(x / 2);
+    return (x & 1) ? (buf[i] >> 4) : (buf[i] & 0x0F);
+}
+static inline void px_set(uint8_t *buf, int x, int y, uint8_t v) {
+    uint32_t i = (uint32_t)y * (EPD_WIDTH / 2) + (uint32_t)(x / 2);
+    if (x & 1) buf[i] = (buf[i] & 0x0F) | ((v & 0x0F) << 4);
+    else        buf[i] = (buf[i] & 0xF0) | (v & 0x0F);
+}
+
+static void draw_text_small(const char *text, int dest_x, int baseline_y) {
+    // FiraSans: ascender≈39, descender≈12, advance_y≈50
+    // Wir rendern in ein Temp-Puffer (volle Breite, 70 Zeilen) und skalieren 2:1
+    // ins Haupt-FB. Ergebnis: Glyphen ~halb so gross (~25 px Höhe).
+    const int SRCTH = 70;
+    const int SRC_BL = 50;   // Baseline im Temp-Puffer
+    int y_top = baseline_y - SRC_BL / 2;
+
+    uint8_t *tmp = (uint8_t *)heap_caps_malloc((EPD_WIDTH / 2) * SRCTH,
+                                               MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!tmp) return;
+    memset(tmp, 0xFF, (EPD_WIDTH / 2) * SRCTH);
+
+    int32_t cx = 0, cy = SRC_BL;
+    writeln((GFXfont *)&FiraSans, text, &cx, &cy, tmp);
+
+    for (int sy = 0; sy + 1 < SRCTH; sy += 2) {
+        int dy = y_top + sy / 2;
+        if (dy < 0 || dy >= EPD_HEIGHT) continue;
+        for (int sx = 0; sx + 1 < EPD_WIDTH; sx += 2) {
+            int dx = dest_x + sx / 2;
+            if (dx >= EPD_WIDTH) break;
+            uint32_t v = (uint32_t)px_get(tmp, sx,   sy)
+                       + (uint32_t)px_get(tmp, sx+1, sy)
+                       + (uint32_t)px_get(tmp, sx,   sy+1)
+                       + (uint32_t)px_get(tmp, sx+1, sy+1);
+            uint8_t avg = (uint8_t)(v / 4);
+            if (avg < 0xF)
+                px_set(fb, dx, dy, avg);
+        }
+    }
+    heap_caps_free(tmp);
 }
 
 static void draw_hline(int x, int y, int len) {
@@ -80,33 +128,47 @@ static void render_data(const VictronData &d) {
     else                snprintf(buf, sizeof(buf), "-- %%");
     draw_text(buf, EPD_WIDTH - 140, 75);
 
-    // Strom und Temperatur unterhalb des Balkens
+    // Strom unterhalb des Balkens
     ftoa1(d.current, buf, sizeof(buf));
     strncat(buf, " A", sizeof(buf) - strlen(buf) - 1);
     draw_text(buf, COL_LEFT, 185);
 
-    ftoa1(d.temp, buf, sizeof(buf));
-    // °C: 0xC2 0xB0 ist UTF-8 für °, aber writeln braucht Latin-1 → \xb0 reicht hier
-    strncat(buf, " \xb0""C", sizeof(buf) - strlen(buf) - 1);  // split: \xb0C wäre mehrbytiger Escape
-    draw_text(buf, COL_MID + 120, 185);
-
     // ── Trennlinie ───────────────────────────────────────────────────────────
-    draw_hline(COL_LEFT, 220, EPD_WIDTH - 40);
+    draw_hline(COL_LEFT, 200, EPD_WIDTH - 40);
 
-    // ── Abschnitt 2: Solar / Verbrauch (y 230..400) ──────────────────────────
+    // ── Abschnitt 2: Solar / Verbrauch (y 200..340) ──────────────────────────
 
-    draw_text("SOLAR", COL_LEFT, 290);
+    draw_text("SOLAR", COL_LEFT, 255);
     ftoa1(d.solar_w, buf, sizeof(buf));
     strncat(buf, " W", sizeof(buf) - strlen(buf) - 1);
-    draw_text(buf, COL_LEFT, 360);
+    draw_text(buf, COL_LEFT, 315);
 
     // Vertikale Mittellinie zwischen Solar und Verbrauch
-    epd_draw_vline(COL_MID, 230, 150, 0x00, fb);
+    epd_draw_vline(COL_MID, 200, 140, 0x00, fb);
 
-    draw_text("VERBRAUCH", COL_MID + 20, 290);
+    draw_text("VERBRAUCH", COL_MID + 20, 255);
     ftoa1(d.load_w, buf, sizeof(buf));
     strncat(buf, " W", sizeof(buf) - strlen(buf) - 1);
-    draw_text(buf, COL_MID + 20, 360);
+    draw_text(buf, COL_MID + 20, 315);
+
+    // ── Trennlinie ───────────────────────────────────────────────────────────
+    draw_hline(COL_LEFT, 340, EPD_WIDTH - 40);
+
+    // ── Abschnitt 3: Temperaturen (y 340..400) ───────────────────────────────
+    // 4 Spalten à ~230 px: Aus · Inn · Kuehl · Schrank
+    // \xb0 = ° in Latin-1 (wie bei writeln erwartet)
+    struct { float val; const char *label; int x; } temps[] = {
+        { d.temp_aussen,  "Aus", 20  },
+        { d.temp_innen,   "Inn", 250 },
+        { d.temp_fridge,  "Khl", 480 },
+        { d.temp_cabinet, "Ger", 710 },
+    };
+    for (auto &t : temps) {
+        char tmp[16];
+        ftoa1(t.val, tmp, sizeof(tmp));
+        snprintf(buf, sizeof(buf), "%s %s\xb0""C", t.label, tmp);
+        draw_text(buf, t.x, 382);
+    }
 }
 
 static const char *relay_st_txt(int8_t v) {
@@ -122,9 +184,9 @@ static void render_status(bool mqtt_ok, const char *ip, int menu_sel, const int8
     draw_hline(COL_LEFT, 400, EPD_WIDTH - 40);
 
     snprintf(buf, sizeof(buf), "WiFi: %s", ip ? ip : "--");
-    draw_text(buf, COL_LEFT, 430);
+    draw_text_small(buf, COL_LEFT, 430);
 
-    draw_text(mqtt_ok ? "MQTT: OK" : "MQTT: --", COL_MID + 120, 430);
+    draw_text_small(mqtt_ok ? "MQTT: OK" : "MQTT: --", COL_MID + 120, 430);
 
     // Menueleiste: Relais zeigen Istzustand (MQTT state)
     const int y0   = 458;

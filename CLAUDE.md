@@ -1,10 +1,10 @@
 # CLAUDE.md – Camping-Bus E-Paper Display
 
-**Version:** 0.5.0 · Vollständige Nutzerdoku: [`README.md`](README.md) · Änderungen: [`CHANGELOG.md`](CHANGELOG.md)
+**Version:** 0.7.0 · Vollständige Nutzerdoku: [`README.md`](README.md) · Änderungen: [`CHANGELOG.md`](CHANGELOG.md)
 
 ## Kurzüberblick
 
-MQTT-E-Paper-Anzeige (LilyGo T5 4.7″ S3): MPPT-Werte, Relais-Menü mit einem Taster (Kurz = weiter, Lang = Aktion), Relais-State per MQTT. **Kein Touch** in der Firmware. **Kein GPIO-0-Taster** (EPD CFG_STR / Strapping).
+MQTT-E-Paper-Anzeige (LilyGo T5 4.7″ S3): MPPT/Batterie per **JSON-Topic** oder flachen Topics, **vier Temp-Topics**, Relais-Menü mit einem Taster (Kurz = weiter, Lang = Aktion), Relais-State per MQTT. **Kein Touch** in der Firmware. **Kein GPIO-0-Taster** (EPD CFG_STR / Strapping).
 
 ## Constraints
 
@@ -26,13 +26,14 @@ MQTT-E-Paper-Anzeige (LilyGo T5 4.7″ S3): MPPT-Werte, Relais-Menü mit einem T
 
 ## MQTT (Defaults in config.h)
 
-- Messwerte: `lars/mppt/soc`, `batV`, `solarW` (+ optional leere Topics).
+- MPPT/Batterie: `TOPIC_TELEMETRY_JSON` (z. B. `camping/telemetry/mppt`, JSON) **oder** flach `lars/mppt/soc`, `batV`, `solarW` (+ optional Strom/Last, leer = aus).
+- Temperaturen: `camping/temp/aussen|innen|kuehlschrank|geraeteschrank` (je `""` = aus).
 - Relais CMD: `lars/relais/{1,2,3}/cmd`, Payload `MQTT_RELAY_PAYLOAD`.
 - Relais State: `lars/relais/{1,2,3}/state` → Anzeige `R1 AN` / `aus` / `--`.
 
 ## Refresh
 
-- **Vollbild:** `DATA_REFRESH_INTERVAL_MS`, `FULL_REFRESH_INTERVAL`, Menü „Bild neu“.
+- **Vollbild:** Schwellen + `DATA_REFRESH_INTERVAL_MS`, `FULL_REFRESH_INTERVAL`, Menü „Bild neu“.
 - **Menü-Streifen:** `epd_draw_grayscale_image(Rect, fb + offset)` nur für unteren Bereich.
 
 ## Provisioning

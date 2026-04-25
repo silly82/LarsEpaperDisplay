@@ -12,25 +12,30 @@
 //   ┌─────────────────────────────────────────────────────────────┐ y=0
 //   │  AKKU                                            xx.x V     │
 //   │  [████████████████████████████░░░░░░░░]  78 %              │ y=80
-//   │  23.4 A                                  24.0 °C            │ y=185
-//   ├─────────────────────────────────────────────────────────────┤ y=220
-//   │  SOLAR                        │  VERBRAUCH                  │ y=290
-//   │  342 W                        │  128 W                      │ y=360
+//   │  23.4 A                                                      │ y=185
+//   ├─────────────────────────────────────────────────────────────┤ y=200
+//   │  SOLAR                        │  VERBRAUCH                  │ y=255
+//   │  342 W                        │  128 W                      │ y=315
+//   ├─────────────────────────────────────────────────────────────┤ y=340
+//   │  Aus 18.5°C  Inn 22.0°C  Kuehl 7.2°C  Schrank 35.1°C       │ y=382
 //   ├─────────────────────────────────────────────────────────────┤ y=400
-//   │  WiFi: 192.168.1.42           MQTT: OK                      │ y=460
-//   │  WiFi/MQTT · Menue R1–R3 (AN/aus) + Bild neu                   │ y=400–540
+//   │  WiFi: 192.168.1.42           MQTT: OK                      │ y=430
+//   │  [R1 AN] [R2 aus] [R3 --] [Bild neu]                        │ y=458–514
 //   └─────────────────────────────────────────────────────────────┘ y=540
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Alle Victron-Messwerte. Felder mit -1 bedeuten "noch kein Wert empfangen"
 // und werden als "--" dargestellt.
 struct VictronData {
-    float soc     = -1;   // Ladezustand         [%]
-    float voltage = -1;   // Batteriespannung     [V]
-    float current = -1;   // Strom (+=laden)      [A]
-    float solar_w = -1;   // Solarleistung        [W]
-    float load_w  = -1;   // Verbrauch            [W]
-    float temp    = -1;   // Batterietemperatur   [°C]
+    float soc          = -1;   // Ladezustand         [%]
+    float voltage      = -1;   // Batteriespannung     [V]
+    float current      = -1;   // Strom (+=laden)      [A]
+    float solar_w      = -1;   // Solarleistung        [W]
+    float load_w       = -1;   // Verbrauch            [W]
+    float temp_aussen  = -1;   // Aussentemperatur     [°C]
+    float temp_innen   = -1;   // Innentemperatur      [°C]
+    float temp_fridge  = -1;   // Kuehlschrank         [°C]
+    float temp_cabinet = -1;   // Geraeteschrank       [°C]
 };
 
 // Relais-Anzeige: -1 = unbekannt, 0 = aus, 1 = an

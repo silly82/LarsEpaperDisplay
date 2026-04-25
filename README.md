@@ -1,6 +1,6 @@
 # Camping-Bus E-Paper Display
 
-**Version:** 0.5.0 (siehe [`VERSION`](VERSION), Historie [`CHANGELOG.md`](CHANGELOG.md))
+**Version:** 0.7.0 (siehe [`VERSION`](VERSION), Historie [`CHANGELOG.md`](CHANGELOG.md))
 
 E-Paper-Statusanzeige für den Campingbus: MPPT/Batterie- und Solarwerte per **MQTT**, steuerbare **Relais** über dasselbe MQTT, Bedienung mit **einem Taster** und **unterem Menü** auf dem LilyGo **T5 4.7″** (ESP32-S3).
 
@@ -41,16 +41,27 @@ Alle anpassbaren Werte: [`src/config.h`](src/config.h) (Topics, Timing, Menü, R
 
 ## MQTT: Messwerte (Subscribe)
 
-Payload jeweils **reiner Text**, für Messwerte typisch ein **Float** (z. B. `"78.5"`).
+Zwei Modi (siehe `TOPIC_TELEMETRY_JSON` in [`src/config.h`](src/config.h)):
 
-| Topic (Standard) | Bedeutung |
-|------------------|-----------|
+1. **JSON-Telemetrie** (Standard: Topic nicht leer, z. B. `camping/telemetry/mppt`): ein MQTT-Topic, Payload = **JSON-Objekt** mit optionalen Feldern `soc`, `voltage`/`bat_v`, `solar_w`/`solarW`, `current_a`/`batA`, `load_w`/`loadW`. **Temperaturen** kommen in der Firmware **nicht** aus diesem JSON, sondern nur über die separaten Topics unten.
+2. **Flache Topics**: wenn `TOPIC_TELEMETRY_JSON` auf `""` steht, gelten die Zeilen unten; Payload jeweils **reiner Text** mit **Float** (z. B. `"78.5"`).
+
+| Topic (Standard, flacher Modus) | Bedeutung |
+|---------------------------------|-----------|
 | `lars/mppt/soc` | Ladezustand % |
 | `lars/mppt/batV` | Batteriespannung V |
 | `lars/mppt/solarW` | Solarleistung W |
 | *optional* `TOPIC_CURRENT` | Strom A (leer `""` = deaktiviert) |
 | *optional* `TOPIC_LOAD_POWER` | Last W |
-| *optional* `TOPIC_TEMP` | Temperatur °C |
+
+**Umgebungstemperaturen** (eigene Topics, immer Subscribe wenn nicht leer):
+
+| Topic (Standard) | Bedeutung |
+|------------------|-----------|
+| `camping/temp/aussen` | Außen °C |
+| `camping/temp/innen` | Innen °C |
+| `camping/temp/kuehlschrank` | Kühlschrank °C |
+| `camping/temp/geraeteschrank` | Geräteschrank °C |
 
 ---
 
@@ -78,7 +89,7 @@ Node-RED (oder anderer Dienst) sollte nach dem Schalten den **Istzustand** auf `
 
 | Auslöser | Verhalten |
 |----------|-----------|
-| Intervall `DATA_REFRESH_INTERVAL_MS` (45 s) | Vollbild mit Messwerten + Menü |
+| Neue / geänderte Messwerte über **Schwellen** (`DISPLAY_THRESHOLD_*` in `config.h`) und Mindestabstand `DATA_REFRESH_INTERVAL_MS` (15 s) | Vollbild mit Messwerten + Menü |
 | Intervall `FULL_REFRESH_INTERVAL` (5 min) | Vollbild (Geister reduzieren) |
 | Menüwechsel / neuer Relais-State | Nur Bereich ab **y = 400** (WiFi/MQTT + Menüleiste) |
 | Start, Menü „Bild neu“ (Lang) | Vollbild |
@@ -118,10 +129,12 @@ LarsEpaperDisplay/
 ├── VERSION
 ├── CHANGELOG.md
 ├── README.md
+├── NODE_RED.md            # MQTT/JSON, Node-RED-Flow
 ├── CLAUDE.md              # Kurzreferenz für Entwicklung / KI
 ├── hardware.md
 ├── platformio.ini
 ├── data/                  # LittleFS-Vorlage (config.json entsteht zur Laufzeit)
+├── node-red/              # Beispiel-Flow (siehe NODE_RED.md)
 └── src/
     ├── config.h
     ├── main.cpp
