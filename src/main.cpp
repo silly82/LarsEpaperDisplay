@@ -389,10 +389,9 @@ void loop() {
     bool     mqtt_ok   = mqtt.connected();
     bool     ghost_due = (now - last_ghost_ms >= FULL_REFRESH_INTERVAL);
     
-    // More restrictive gate: require longer intervals and significant changes
+    // Gate für Full-Refresh: nur bei ersten Daten oder periodisch gegen Ghosting
     bool     gate_open = (last_shown.soc < 0.0f) || 
-                        (now - last_data_ms >= DATA_REFRESH_INTERVAL_MS && significant_change) ||
-                        (now - last_data_ms >= DATA_REFRESH_INTERVAL_MS * 3);  // Force update every 3x interval
+                        (now - last_data_ms >= DATA_REFRESH_INTERVAL_MS * 5);  // Sehr selten full refresh
 
     bool do_full = (full_refresh_needed && gate_open) || ghost_due;
     if (do_full) {
@@ -404,6 +403,11 @@ void loop() {
         full_refresh_needed = false;
         significant_change = false;
         menu_strip_dirty = false;
+    } else if (threshold_exceeded() && (now - last_data_ms >= 5000)) {  // Partielle Updates alle 5s
+        display_partial_update(victron, last_shown, mqtt_ok, ip_str);
+        last_shown = victron;
+        last_data_ms = now;
+        significant_change = false;
     } else if (menu_strip_dirty && (now - last_menu_update_ms >= 1000)) {  // Throttle menu updates to max 1/sec
         display_menu_strip_update(mqtt_ok, ip_str, menu_sel, relay_state);
         last_menu_update_ms = now;

@@ -68,9 +68,10 @@
 #define MENU_LONG_PRESS_MS  900UL
 
 // ── Refresh-Timing ────────────────────────────────────────────
-// Nur Vollbild (epd_clear): Partial-Update fuer Messwerte entfaellt (Ghosting/Panel).
+// Partielle Updates reduzieren Flackern erheblich
 #define DATA_REFRESH_INTERVAL_MS  30000UL    // Minimaler Abstand zwischen Vollbild-Refreshes [ms]
-#define FULL_REFRESH_INTERVAL     600000UL   // Periodisches Vollbild gegen Ghosting [ms] (10 min)
+#define FULL_REFRESH_INTERVAL     1800000UL  // Periodisches Vollbild gegen Ghosting [ms] (30 min)
+#define PARTIAL_REFRESH_MIN_MS    5000UL     // Minimaler Abstand zwischen partiellen Updates [ms]
 
 // ── Schwellenwerte fuer Display-Refresh ───────────────────────
 // Refresh nur wenn sich mindestens ein Wert um diesen Betrag geaendert hat.

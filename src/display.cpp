@@ -230,6 +230,15 @@ static void render_status(bool mqtt_ok, const char *ip, int menu_sel, const int8
 // Unteren Bildschirmteil ab STATUS_TOP nur diesen Ausschnitt aus dem FB zum Panel schicken
 static constexpr int32_t STATUS_TOP = 400;
 
+// Definierte Bereiche für partielle Updates
+static constexpr Rect_t AREA_SOC_PERCENT = {EPD_WIDTH - 140, 60, 120, 40};     // SOC Prozent
+static constexpr Rect_t AREA_VOLTAGE = {COL_MID + 120, 40, 200, 40};           // Spannung
+static constexpr Rect_t AREA_CURRENT = {COL_LEFT, 165, 200, 40};               // Strom
+static constexpr Rect_t AREA_SOC_BAR = {COL_LEFT, 80, EPD_WIDTH - 40, 60};     // SOC Balken
+static constexpr Rect_t AREA_SOLAR = {COL_LEFT, 295, 200, 40};                 // Solar Watt
+static constexpr Rect_t AREA_LOAD = {COL_MID + 20, 295, 200, 40};              // Load Watt
+static constexpr Rect_t AREA_TEMPS = {COL_LEFT, 340, EPD_WIDTH - 40, 60};      // Alle Temperaturen
+
 static void epd_push_region(Rect_t area) {
     uint8_t *ptr = fb + (size_t)area.y * (EPD_WIDTH / 2) + (size_t)area.x / 2;
     epd_poweron();
@@ -279,6 +288,108 @@ void display_menu_strip_update(bool mqtt_ok, const char *ip, int menu_sel,
     render_status(mqtt_ok, ip, menu_sel, relay_st);
     Rect_t area = { 0, STATUS_TOP, EPD_WIDTH, EPD_HEIGHT - STATUS_TOP };
     epd_push_region(area);
+}
+
+void display_partial_update(const VictronData &d, const VictronData &last_d, bool mqtt_ok, const char *ip) {
+    char buf[32];
+    bool any_update = false;
+
+    // SOC Prozent aktualisieren
+    if (fabsf(d.soc - last_d.soc) >= DISPLAY_THRESHOLD_SOC) {
+        fb_clear_rect(AREA_SOC_PERCENT.x, AREA_SOC_PERCENT.y, AREA_SOC_PERCENT.width, AREA_SOC_PERCENT.height);
+        if (d.soc >= 0.0f) snprintf(buf, sizeof(buf), "%.0f %%", (double)d.soc);
+        else                snprintf(buf, sizeof(buf), "-- %%");
+        draw_text(buf, EPD_WIDTH - 140, 75);
+        epd_push_region(AREA_SOC_PERCENT);
+        any_update = true;
+    }
+
+    // Spannung aktualisieren
+    if (fabsf(d.voltage - last_d.voltage) >= DISPLAY_THRESHOLD_VOLT) {
+        fb_clear_rect(AREA_VOLTAGE.x, AREA_VOLTAGE.y, AREA_VOLTAGE.width, AREA_VOLTAGE.height);
+        ftoa1(d.voltage, buf, sizeof(buf));
+        strncat(buf, " V", sizeof(buf) - strlen(buf) - 1);
+        draw_text(buf, COL_MID + 120, 60);
+        epd_push_region(AREA_VOLTAGE);
+        any_update = true;
+    }
+
+    // Strom aktualisieren
+    if (fabsf(d.current - last_d.current) >= DISPLAY_THRESHOLD_CURR) {
+        fb_clear_rect(AREA_CURRENT.x, AREA_CURRENT.y, AREA_CURRENT.width, AREA_CURRENT.height);
+        ftoa1(d.current, buf, sizeof(buf));
+        strncat(buf, " A", sizeof(buf) - strlen(buf) - 1);
+        draw_text(buf, COL_LEFT, 185);
+        epd_push_region(AREA_CURRENT);
+        any_update = true;
+    }
+
+    // SOC Balken nur bei größeren Änderungen aktualisieren (teuer)
+    if (fabsf(d.soc - last_d.soc) >= DISPLAY_THRESHOLD_SOC * 2.0f) {
+        fb_clear_rect(AREA_SOC_BAR.x, AREA_SOC_BAR.y, AREA_SOC_BAR.width, AREA_SOC_BAR.height);
+        draw_soc_bar(COL_LEFT, 80, EPD_WIDTH - 40, 60, d.soc);
+        epd_push_region(AREA_SOC_BAR);
+        any_update = true;
+    }
+
+    // Solar Leistung aktualisieren
+    if (fabsf(d.solar_w - last_d.solar_w) >= DISPLAY_THRESHOLD_SOLAR) {
+        fb_clear_rect(AREA_SOLAR.x, AREA_SOLAR.y, AREA_SOLAR.width, AREA_SOLAR.height);
+        ftoa1(d.solar_w, buf, sizeof(buf));
+        strncat(buf, " W", sizeof(buf) - strlen(buf) - 1);
+        draw_text(buf, COL_LEFT, 315);
+        epd_push_region(AREA_SOLAR);
+        any_update = true;
+    }
+
+    // Verbrauch aktualisieren
+    if (fabsf(d.load_w - last_d.load_w) >= DISPLAY_THRESHOLD_LOAD) {
+        fb_clear_rect(AREA_LOAD.x, AREA_LOAD.y, AREA_LOAD.width, AREA_LOAD.height);
+        ftoa1(d.load_w, buf, sizeof(buf));
+        strncat(buf, " W", sizeof(buf) - strlen(buf) - 1);
+        draw_text(buf, COL_MID + 20, 315);
+        epd_push_region(AREA_LOAD);
+        any_update = true;
+    }
+
+    // Temperaturen aktualisieren (alle zusammen, da sie nah beieinander sind)
+    bool temp_changed = fabsf(d.temp_aussen - last_d.temp_aussen) >= DISPLAY_THRESHOLD_TEMP ||
+                       fabsf(d.temp_innen - last_d.temp_innen) >= DISPLAY_THRESHOLD_TEMP ||
+                       fabsf(d.temp_fridge - last_d.temp_fridge) >= DISPLAY_THRESHOLD_TEMP ||
+                       fabsf(d.temp_cabinet - last_d.temp_cabinet) >= DISPLAY_THRESHOLD_TEMP;
+    
+    if (temp_changed) {
+        fb_clear_rect(AREA_TEMPS.x, AREA_TEMPS.y, AREA_TEMPS.width, AREA_TEMPS.height);
+        
+        const int temp_col_w = (EPD_WIDTH - 2 * COL_LEFT) / 4;
+        constexpr int TEMP_BAND_Y0       = 340;
+        constexpr int TEMP_BAND_Y1       = 400;
+        constexpr int TEMP_BAND_MID      = (TEMP_BAND_Y0 + TEMP_BAND_Y1) / 2;
+        constexpr int TEMP_VERTICAL_BIAS = 9;
+        constexpr int TEMP_BASE_GAP        = 24;
+        const int mid    = TEMP_BAND_MID + TEMP_VERTICAL_BIAS;
+        const int y_temp_lbl = mid - TEMP_BASE_GAP / 2;
+        const int y_temp_val = mid + TEMP_BASE_GAP / 2;
+        
+        struct { float val; const char *name; } temps[] = {
+            { d.temp_aussen,  "Aussen" },
+            { d.temp_innen,   "Innen" },
+            { d.temp_fridge,  "Kuehlschrank" },
+            { d.temp_cabinet, "Geraeteschrank" },
+        };
+        
+        for (size_t i = 0; i < sizeof(temps) / sizeof(temps[0]); i++) {
+            int x = COL_LEFT + (int)i * temp_col_w;
+            draw_text_small(temps[i].name, x, y_temp_lbl);
+            char tmp[16];
+            ftoa1(temps[i].val, tmp, sizeof(tmp));
+            snprintf(buf, sizeof(buf), "%s \xb0""C", tmp);
+            draw_text_small(buf, x, y_temp_val);
+        }
+        
+        epd_push_region(AREA_TEMPS);
+        any_update = true;
+    }
 }
 
 void display_prov_screen() {

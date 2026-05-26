@@ -53,6 +53,9 @@ void display_boot_msg(const char *line1, const char *line2 = nullptr);
 void display_full_refresh(const VictronData &d, bool mqtt_ok, const char *ip, int menu_sel,
                           const int8_t *relay_st);
 
+// Partielle Updates für einzelne Bereiche
+void display_partial_update(const VictronData &d, const VictronData &last_d, bool mqtt_ok, const char *ip);
+
 void display_menu_strip_update(bool mqtt_ok, const char *ip, int menu_sel,
                                const int8_t *relay_st);
 
