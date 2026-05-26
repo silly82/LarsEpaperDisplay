@@ -234,13 +234,17 @@ static void epd_push_region(Rect_t area) {
     uint8_t *ptr = fb + (size_t)area.y * (EPD_WIDTH / 2) + (size_t)area.x / 2;
     epd_poweron();
     epd_draw_grayscale_image(area, ptr);
+    delay(50);  // Allow partial update to complete properly
     epd_poweroff();
 }
 
 // Framebuffer auf das Display schreiben (ohne vorheriges Clear → schnell)
 static void epd_push(bool with_clear) {
     epd_poweron();
-    if (with_clear) epd_clear();
+    if (with_clear) {
+        epd_clear();
+        delay(100);  // Allow clear to complete
+    }
     epd_draw_grayscale_image(epd_full_screen(), fb);
     epd_poweroff();
 }

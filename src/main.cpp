@@ -34,7 +34,9 @@ static volatile bool menu_strip_dirty                = false;
 
 static uint32_t     last_data_ms  = 0;
 static uint32_t     last_ghost_ms = 0;
+static uint32_t     last_menu_update_ms = 0;
 static bool         full_refresh_needed = true;
+static bool         significant_change = false;
 
 static char         mqtt_json_buf[768];
 
@@ -86,15 +88,22 @@ static bool threshold_exceeded() {
         if (prev < 0.0f) return curr >= 0.0f;   // erster empfangener Wert
         return fabsf(curr - prev) >= thr;
     };
-    return chg(last_shown.soc,          victron.soc,          DISPLAY_THRESHOLD_SOC)
-        || chg(last_shown.voltage,      victron.voltage,      DISPLAY_THRESHOLD_VOLT)
-        || chg(last_shown.current,      victron.current,      DISPLAY_THRESHOLD_CURR)
-        || chg(last_shown.solar_w,      victron.solar_w,      DISPLAY_THRESHOLD_SOLAR)
-        || chg(last_shown.load_w,       victron.load_w,       DISPLAY_THRESHOLD_LOAD)
-        || chg(last_shown.temp_aussen,  victron.temp_aussen,  DISPLAY_THRESHOLD_TEMP)
-        || chg(last_shown.temp_innen,   victron.temp_innen,   DISPLAY_THRESHOLD_TEMP)
-        || chg(last_shown.temp_fridge,  victron.temp_fridge,  DISPLAY_THRESHOLD_TEMP)
-        || chg(last_shown.temp_cabinet, victron.temp_cabinet, DISPLAY_THRESHOLD_TEMP);
+    
+    // Only check critical values for immediate updates
+    bool critical_change = chg(last_shown.soc, victron.soc, DISPLAY_THRESHOLD_SOC * 2.0f)  // Double threshold for SOC
+        || chg(last_shown.voltage, victron.voltage, DISPLAY_THRESHOLD_VOLT * 1.5f);        // 1.5x threshold for voltage
+    
+    // Less critical values need larger changes
+    bool minor_change = chg(last_shown.current, victron.current, DISPLAY_THRESHOLD_CURR * 2.0f)
+        || chg(last_shown.solar_w, victron.solar_w, DISPLAY_THRESHOLD_SOLAR * 2.0f)
+        || chg(last_shown.load_w, victron.load_w, DISPLAY_THRESHOLD_LOAD * 2.0f)
+        || chg(last_shown.temp_aussen, victron.temp_aussen, DISPLAY_THRESHOLD_TEMP * 2.0f)
+        || chg(last_shown.temp_innen, victron.temp_innen, DISPLAY_THRESHOLD_TEMP * 2.0f)
+        || chg(last_shown.temp_fridge, victron.temp_fridge, DISPLAY_THRESHOLD_TEMP * 2.0f)
+        || chg(last_shown.temp_cabinet, victron.temp_cabinet, DISPLAY_THRESHOLD_TEMP * 2.0f);
+    
+    significant_change = critical_change;
+    return critical_change || minor_change;
 }
 
 static void apply_telemetry_json(const char *json) {
@@ -135,7 +144,9 @@ static void apply_telemetry_json(const char *json) {
     apply2("current_a", "batA", victron.current);
     apply2("load_w", "loadW", victron.load_w);
 
-    if (any_field || threshold_exceeded()) full_refresh_needed = true;
+    if (any_field && threshold_exceeded()) {
+        full_refresh_needed = true;
+    }
 }
 
 static int8_t parse_relay_payload(char *s) {
@@ -280,9 +291,7 @@ static bool mqtt_publish_relay(const char *topic) {
 
 static void on_menu_advance(Button2 &b) {
     menu_sel = (menu_sel + 1) % MENU_ITEM_COUNT;
-    if (WiFi.status() == WL_CONNECTED) {
-        display_menu_strip_update(mqtt.connected(), ip_str, menu_sel, relay_state);
-    }
+    menu_strip_dirty = true;  // Mark for update instead of immediate refresh
 }
 
 static void on_menu_select(Button2 &b) {
@@ -379,19 +388,25 @@ void loop() {
     uint32_t now       = millis();
     bool     mqtt_ok   = mqtt.connected();
     bool     ghost_due = (now - last_ghost_ms >= FULL_REFRESH_INTERVAL);
-    // Gate offen wenn: noch nie Daten angezeigt ODER Mindestabstand abgelaufen
-    bool     gate_open = (last_shown.soc < 0.0f) || (now - last_data_ms >= DATA_REFRESH_INTERVAL_MS);
+    
+    // More restrictive gate: require longer intervals and significant changes
+    bool     gate_open = (last_shown.soc < 0.0f) || 
+                        (now - last_data_ms >= DATA_REFRESH_INTERVAL_MS && significant_change) ||
+                        (now - last_data_ms >= DATA_REFRESH_INTERVAL_MS * 3);  // Force update every 3x interval
 
     bool do_full = (full_refresh_needed && gate_open) || ghost_due;
     if (do_full) {
         display_full_refresh(victron, mqtt_ok, ip_str, menu_sel, relay_state);
         last_shown   = victron;
         last_data_ms = now;
+        last_menu_update_ms = now;
         if (ghost_due) last_ghost_ms = now;
         full_refresh_needed = false;
+        significant_change = false;
         menu_strip_dirty = false;
-    } else if (menu_strip_dirty) {
+    } else if (menu_strip_dirty && (now - last_menu_update_ms >= 1000)) {  // Throttle menu updates to max 1/sec
         display_menu_strip_update(mqtt_ok, ip_str, menu_sel, relay_state);
+        last_menu_update_ms = now;
         menu_strip_dirty = false;
     }
 }
