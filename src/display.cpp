@@ -294,8 +294,8 @@ void display_partial_update(const VictronData &d, const VictronData &last_d, boo
     char buf[32];
     bool any_update = false;
 
-    // SOC Prozent aktualisieren
-    if (fabsf(d.soc - last_d.soc) >= DISPLAY_THRESHOLD_SOC) {
+    // SOC Prozent aktualisieren  
+    if (fabsf(d.soc - last_d.soc) >= 5.0f) {  // Use literal value instead of constant
         fb_clear_rect(AREA_SOC_PERCENT.x, AREA_SOC_PERCENT.y, AREA_SOC_PERCENT.width, AREA_SOC_PERCENT.height);
         if (d.soc >= 0.0f) snprintf(buf, sizeof(buf), "%.0f %%", (double)d.soc);
         else                snprintf(buf, sizeof(buf), "-- %%");
@@ -305,7 +305,7 @@ void display_partial_update(const VictronData &d, const VictronData &last_d, boo
     }
 
     // Spannung aktualisieren
-    if (fabsf(d.voltage - last_d.voltage) >= DISPLAY_THRESHOLD_VOLT) {
+    if (fabsf(d.voltage - last_d.voltage) >= 0.5f) {  // Use literal value instead of constant
         fb_clear_rect(AREA_VOLTAGE.x, AREA_VOLTAGE.y, AREA_VOLTAGE.width, AREA_VOLTAGE.height);
         ftoa1(d.voltage, buf, sizeof(buf));
         strncat(buf, " V", sizeof(buf) - strlen(buf) - 1);
@@ -315,7 +315,7 @@ void display_partial_update(const VictronData &d, const VictronData &last_d, boo
     }
 
     // Strom aktualisieren
-    if (fabsf(d.current - last_d.current) >= DISPLAY_THRESHOLD_CURR) {
+    if (fabsf(d.current - last_d.current) >= 0.5f) {  // Use literal value instead of constant
         fb_clear_rect(AREA_CURRENT.x, AREA_CURRENT.y, AREA_CURRENT.width, AREA_CURRENT.height);
         ftoa1(d.current, buf, sizeof(buf));
         strncat(buf, " A", sizeof(buf) - strlen(buf) - 1);
@@ -325,7 +325,7 @@ void display_partial_update(const VictronData &d, const VictronData &last_d, boo
     }
 
     // SOC Balken nur bei größeren Änderungen aktualisieren (teuer)
-    if (fabsf(d.soc - last_d.soc) >= DISPLAY_THRESHOLD_SOC * 2.0f) {
+    if (fabsf(d.soc - last_d.soc) >= 10.0f) {  // Use literal value (SOC threshold * 2)
         fb_clear_rect(AREA_SOC_BAR.x, AREA_SOC_BAR.y, AREA_SOC_BAR.width, AREA_SOC_BAR.height);
         draw_soc_bar(COL_LEFT, 80, EPD_WIDTH - 40, 60, d.soc);
         epd_push_region(AREA_SOC_BAR);
@@ -333,7 +333,7 @@ void display_partial_update(const VictronData &d, const VictronData &last_d, boo
     }
 
     // Solar Leistung aktualisieren
-    if (fabsf(d.solar_w - last_d.solar_w) >= DISPLAY_THRESHOLD_SOLAR) {
+    if (fabsf(d.solar_w - last_d.solar_w) >= 5.0f) {  // Use literal value instead of constant
         fb_clear_rect(AREA_SOLAR.x, AREA_SOLAR.y, AREA_SOLAR.width, AREA_SOLAR.height);
         ftoa1(d.solar_w, buf, sizeof(buf));
         strncat(buf, " W", sizeof(buf) - strlen(buf) - 1);
@@ -343,7 +343,7 @@ void display_partial_update(const VictronData &d, const VictronData &last_d, boo
     }
 
     // Verbrauch aktualisieren
-    if (fabsf(d.load_w - last_d.load_w) >= DISPLAY_THRESHOLD_LOAD) {
+    if (fabsf(d.load_w - last_d.load_w) >= 5.0f) {  // Use literal value instead of constant
         fb_clear_rect(AREA_LOAD.x, AREA_LOAD.y, AREA_LOAD.width, AREA_LOAD.height);
         ftoa1(d.load_w, buf, sizeof(buf));
         strncat(buf, " W", sizeof(buf) - strlen(buf) - 1);
@@ -353,10 +353,10 @@ void display_partial_update(const VictronData &d, const VictronData &last_d, boo
     }
 
     // Temperaturen aktualisieren (alle zusammen, da sie nah beieinander sind)
-    bool temp_changed = fabsf(d.temp_aussen - last_d.temp_aussen) >= DISPLAY_THRESHOLD_TEMP ||
-                       fabsf(d.temp_innen - last_d.temp_innen) >= DISPLAY_THRESHOLD_TEMP ||
-                       fabsf(d.temp_fridge - last_d.temp_fridge) >= DISPLAY_THRESHOLD_TEMP ||
-                       fabsf(d.temp_cabinet - last_d.temp_cabinet) >= DISPLAY_THRESHOLD_TEMP;
+    bool temp_changed = fabsf(d.temp_aussen - last_d.temp_aussen) >= 0.5f ||
+                       fabsf(d.temp_innen - last_d.temp_innen) >= 0.5f ||
+                       fabsf(d.temp_fridge - last_d.temp_fridge) >= 0.5f ||
+                       fabsf(d.temp_cabinet - last_d.temp_cabinet) >= 0.5f;
     
     if (temp_changed) {
         fb_clear_rect(AREA_TEMPS.x, AREA_TEMPS.y, AREA_TEMPS.width, AREA_TEMPS.height);
