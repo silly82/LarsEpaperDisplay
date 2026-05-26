@@ -28,15 +28,18 @@
 // Alle Victron-Messwerte. Felder mit -1 bedeuten "noch kein Wert empfangen"
 // und werden als "--" dargestellt.
 struct VictronData {
-    float soc          = -1;   // Ladezustand         [%]
-    float voltage      = -1;   // Batteriespannung     [V]
-    float current      = -1;   // Strom (+=laden)      [A]
-    float solar_w      = -1;   // Solarleistung        [W]
-    float load_w       = -1;   // Verbrauch            [W]
-    float temp_aussen  = -1;   // Aussentemperatur     [°C]
-    float temp_innen   = -1;   // Innentemperatur      [°C]
-    float temp_fridge  = -1;   // Kuehlschrank         [°C]
-    float temp_cabinet = -1;   // Geraeteschrank       [°C]
+    float soc;          // Ladezustand         [%]
+    float voltage;      // Batteriespannung     [V]
+    float current;      // Strom (+=laden)      [A]
+    float solar_w;      // Solarleistung        [W]
+    float load_w;       // Verbrauch            [W]
+    float temp_aussen;  // Aussentemperatur     [°C]
+    float temp_innen;   // Innentemperatur      [°C]
+    float temp_fridge;  // Kuehlschrank         [°C]
+    float temp_cabinet; // Geraeteschrank       [°C]
+    
+    VictronData() : soc(-1), voltage(-1), current(-1), solar_w(-1), load_w(-1),
+                    temp_aussen(-1), temp_innen(-1), temp_fridge(-1), temp_cabinet(-1) {}
 };
 
 // Relais-Anzeige: -1 = unbekannt, 0 = aus, 1 = an
