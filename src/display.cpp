@@ -285,8 +285,15 @@ void display_prov_screen() {
     fb_clear();
     draw_text("SETUP-MODUS", COL_LEFT, 160);
     draw_text("Mit WLAN verbinden:", COL_LEFT, 240);
-    draw_text("  " AP_SSID, COL_LEFT, 295);
-    draw_text("  Passwort: " AP_PASSWORD, COL_LEFT, 345);
+    
+    char ssid_line[64];
+    snprintf(ssid_line, sizeof(ssid_line), "  %s", AP_SSID);
+    draw_text(ssid_line, COL_LEFT, 295);
+    
+    char pass_line[64];
+    snprintf(pass_line, sizeof(pass_line), "  Passwort: %s", AP_PASSWORD);
+    draw_text(pass_line, COL_LEFT, 345);
+    
     draw_text("Browser: http://192.168.4.1", COL_LEFT, 430);
     epd_push(/*with_clear=*/true);
 }
