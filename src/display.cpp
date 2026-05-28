@@ -243,8 +243,8 @@ static void epd_push_region(Rect_t area) {
     uint8_t *ptr = fb + (size_t)area.y * (EPD_WIDTH / 2) + (size_t)area.x / 2;
     epd_poweron();
     epd_draw_grayscale_image(area, ptr);
-    delay(50);  // Allow partial update to complete properly
-    epd_poweroff();
+    delay(100);  // Longer delay for partial updates to complete properly
+    epd_poweroff_all();  // Use poweroff_all for better power management
 }
 
 // Framebuffer auf das Display schreiben (ohne vorheriges Clear → schnell)
@@ -252,19 +252,22 @@ static void epd_push(bool with_clear) {
     epd_poweron();
     if (with_clear) {
         epd_clear();
-        delay(100);  // Allow clear to complete
+        delay(200);  // Longer delay for clear to complete properly
     }
     epd_draw_grayscale_image(epd_full_screen(), fb);
-    epd_poweroff();
+    delay(100);  // Add delay after drawing
+    epd_poweroff_all();  // Use poweroff_all for complete power down
 }
 
 // ── Öffentliche API ───────────────────────────────────────────────────────────
 
 void display_init() {
     epd_init();
-    // PSRAM-Allokation: ps_calloc statt malloc → initialisiert auf 0x00 (schwarz)
-    fb = (uint8_t *)ps_calloc(EPD_WIDTH * EPD_HEIGHT / 2, sizeof(uint8_t));
-    fb_clear();   // Framebuffer auf Weiss setzen
+    // PSRAM-Allokation: ps_malloc für bessere Kontrolle über Initialisierung
+    fb = (uint8_t *)ps_malloc(EPD_WIDTH * EPD_HEIGHT / 2);
+    if (fb) {
+        fb_clear();   // Framebuffer auf Weiss setzen
+    }
 }
 
 void display_boot_msg(const char *line1, const char *line2) {

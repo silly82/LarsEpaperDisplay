@@ -307,8 +307,13 @@ static void on_menu_select(Button2 &b) {
         break;
     case 3:
     default:
-        full_refresh_needed = true;
-        Serial.println("Menue: Vollbild (Bild neu)");
+        // Force immediate full refresh by bypassing gate logic
+        display_full_refresh(victron, mqtt.connected(), ip_str, menu_sel, relay_state);
+        last_shown = victron;
+        last_data_ms = millis();
+        last_ghost_ms = millis();
+        full_refresh_needed = false;
+        Serial.println("Menue: Vollbild (Bild neu) - sofort ausgefuehrt");
         break;
     }
 }
@@ -389,9 +394,10 @@ void loop() {
     bool     mqtt_ok   = mqtt.connected();
     bool     ghost_due = (now - last_ghost_ms >= FULL_REFRESH_INTERVAL);
     
-    // Gate für Full-Refresh: nur bei ersten Daten oder periodisch gegen Ghosting
+    // Gate für Full-Refresh: bei ersten Daten, periodisch gegen Ghosting, oder bei signifikanten Änderungen
     bool     gate_open = (last_shown.soc < 0.0f) || 
-                        (now - last_data_ms >= DATA_REFRESH_INTERVAL_MS * 5);  // Sehr selten full refresh
+                        (now - last_data_ms >= DATA_REFRESH_INTERVAL_MS * 3) ||  // Häufiger full refresh
+                        significant_change;  // Allow full refresh for significant changes
 
     bool do_full = (full_refresh_needed && gate_open) || ghost_due;
     if (do_full) {
