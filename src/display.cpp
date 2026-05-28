@@ -16,8 +16,10 @@
 static uint8_t *fb = nullptr;
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
-static const int COL_LEFT = 20;    // linker Rand
+static const int COL_LEFT = 30;    // linker Rand (mehr Padding)
 static const int COL_MID  = 490;   // Mittellinie (Solar | Verbrauch)
+static const int CARD_RADIUS = 8;  // Radius für abgerundete Ecken
+static const int SHADOW_OFFSET = 3; // Schatten-Versatz
 
 // ── Interne Hilfsfunktionen ───────────────────────────────────────────────────
 
@@ -88,14 +90,107 @@ static void draw_hline(int x, int y, int len) {
     epd_draw_hline(x, y, len, 0x00, fb);
 }
 
-// SOC-Fortschrittsbalken zeichnen
-// x,y = oben-links, w = Gesamtbreite, h = Höhe, soc = 0..100 (-1 = unbekannt)
-static void draw_soc_bar(int x, int y, int w, int h, float soc) {
-    epd_draw_rect(x, y, w, h, 0x00, fb);   // Rahmen
+// Abgerundetes Rechteck mit Schatten (fancy UI)
+static void draw_card(int x, int y, int w, int h, uint8_t fill_color = 0xFF, bool with_shadow = true) {
+    // Schatten zeichnen (leicht versetzt)
+    if (with_shadow) {
+        epd_fill_rect(x + SHADOW_OFFSET, y + SHADOW_OFFSET, w, h, 0xCC, fb);
+    }
+    
+    // Hauptkarte
+    epd_fill_rect(x, y, w, h, fill_color, fb);
+    epd_draw_rect(x, y, w, h, 0x88, fb);
+    
+    // Abgerundete Ecken simulieren (vereinfacht)
+    // Oben links
+    epd_fill_rect(x, y, CARD_RADIUS, CARD_RADIUS, fill_color, fb);
+    epd_draw_circle(x + CARD_RADIUS, y + CARD_RADIUS, CARD_RADIUS, 0x88, fb);
+    
+    // Oben rechts  
+    epd_fill_rect(x + w - CARD_RADIUS, y, CARD_RADIUS, CARD_RADIUS, fill_color, fb);
+    epd_draw_circle(x + w - CARD_RADIUS, y + CARD_RADIUS, CARD_RADIUS, 0x88, fb);
+    
+    // Unten links
+    epd_fill_rect(x, y + h - CARD_RADIUS, CARD_RADIUS, CARD_RADIUS, fill_color, fb);
+    epd_draw_circle(x + CARD_RADIUS, y + h - CARD_RADIUS, CARD_RADIUS, 0x88, fb);
+    
+    // Unten rechts
+    epd_fill_rect(x + w - CARD_RADIUS, y + h - CARD_RADIUS, CARD_RADIUS, CARD_RADIUS, fill_color, fb);
+    epd_draw_circle(x + w - CARD_RADIUS, y + h - CARD_RADIUS, CARD_RADIUS, 0x88, fb);
+}
+
+// Gradient-Balken für SOC (fancy)
+static void draw_gradient_bar(int x, int y, int w, int h, float percentage) {
+    // Hintergrund
+    draw_card(x, y, w, h, 0xF0, true);
+    
+    if (percentage >= 0.0f) {
+        int fill_w = (int)(percentage / 100.0f * (float)(w - 8));
+        
+        // Gradient-Effekt durch verschiedene Graustufen
+        for (int i = 0; i < fill_w; i += 4) {
+            int segment_w = (i + 4 <= fill_w) ? 4 : (fill_w - i);
+            uint8_t shade = 0x20 + (uint8_t)((float)i / (float)fill_w * 0x60);
+            epd_fill_rect(x + 4 + i, y + 4, segment_w, h - 8, shade, fb);
+        }
+        
+        // Glanz-Effekt oben
+        epd_fill_rect(x + 4, y + 4, fill_w, 2, 0x10, fb);
+    }
+}
+
+// Icon-ähnliche Symbole zeichnen
+static void draw_battery_icon(int x, int y, float soc) {
+    const int w = 40, h = 20;
+    
+    // Batterie-Umriss
+    epd_draw_rect(x, y, w, h, 0x00, fb);
+    epd_fill_rect(x + w, y + 4, 4, h - 8, 0x00, fb); // Plus-Pol
+    
+    // Füllstand
     if (soc >= 0.0f) {
         int fill = (int)(soc / 100.0f * (float)(w - 4));
-        epd_fill_rect(x + 2, y + 2, fill, h - 4, 0x00, fb);
+        uint8_t color = (soc > 20.0f) ? 0x00 : 0x44; // Rot bei niedrigem SOC
+        epd_fill_rect(x + 2, y + 2, fill, h - 4, color, fb);
     }
+}
+
+static void draw_solar_icon(int x, int y) {
+    // Vereinfachte Sonne
+    const int r = 12;
+    epd_draw_circle(x + r, y + r, r, 0x00, fb);
+    epd_fill_circle(x + r, y + r, r - 2, 0x44, fb);
+    
+    // Strahlen
+    for (int i = 0; i < 8; i++) {
+        float angle = i * M_PI / 4.0f;
+        int x1 = x + r + (int)((r + 4) * cos(angle));
+        int y1 = y + r + (int)((r + 4) * sin(angle));
+        int x2 = x + r + (int)((r + 8) * cos(angle));
+        int y2 = y + r + (int)((r + 8) * sin(angle));
+        epd_draw_line(x1, y1, x2, y2, 0x00, fb);
+    }
+}
+
+static void draw_load_icon(int x, int y) {
+    // Vereinfachtes Haus
+    const int w = 24, h = 20;
+    
+    // Hauswände
+    epd_draw_rect(x, y + 8, w, h - 8, 0x00, fb);
+    
+    // Dach (Dreieck)
+    epd_draw_line(x, y + 8, x + w/2, y, 0x00, fb);
+    epd_draw_line(x + w/2, y, x + w, y + 8, 0x00, fb);
+    
+    // Tür
+    epd_draw_rect(x + w/2 - 3, y + 12, 6, 8, 0x00, fb);
+}
+
+// SOC-Fortschrittsbalken zeichnen (fancy version)
+// x,y = oben-links, w = Gesamtbreite, h = Höhe, soc = 0..100 (-1 = unbekannt)
+static void draw_soc_bar(int x, int y, int w, int h, float soc) {
+    draw_gradient_bar(x, y, w, h, soc);
 }
 
 // Float → String mit einer Nachkommastelle; "-1" wird als "--" dargestellt
@@ -111,75 +206,88 @@ static void ftoa1(float v, char *buf, size_t len) {
 static void render_data(const VictronData &d) {
     char buf[32];
 
-    // ── Abschnitt 1: Akku (y 0..220) ────────────────────────────────────────
+    // ── Abschnitt 1: Akku-Karte (y 20..200) ─────────────────────────────────
+    
+    const int battery_card_y = 20;
+    const int battery_card_h = 160;
+    draw_card(COL_LEFT, battery_card_y, EPD_WIDTH - 60, battery_card_h, 0xF8, true);
+    
+    // Batterie-Icon und Titel
+    draw_battery_icon(COL_LEFT + 20, battery_card_y + 20, d.soc);
+    draw_text("AKKU", COL_LEFT + 80, battery_card_y + 40);
 
-    draw_text("AKKU", COL_LEFT, 60);
-
-    // Spannung rechtsbündig neben dem Label
+    // Spannung rechtsbündig
     ftoa1(d.voltage, buf, sizeof(buf));
     strncat(buf, " V", sizeof(buf) - strlen(buf) - 1);
-    draw_text(buf, COL_MID + 120, 60);
+    draw_text(buf, EPD_WIDTH - 180, battery_card_y + 40);
 
-    // SOC-Balken: 840 px breit, 60 px hoch
-    draw_soc_bar(COL_LEFT, 80, EPD_WIDTH - 40, 60, d.soc);
+    // SOC-Balken mit Fancy-Gradient
+    draw_soc_bar(COL_LEFT + 20, battery_card_y + 60, EPD_WIDTH - 120, 50, d.soc);
 
-    // SOC-Prozentzahl über dem rechten Balkenende
+    // SOC-Prozentzahl über dem Balken
     if (d.soc >= 0.0f) snprintf(buf, sizeof(buf), "%.0f %%", (double)d.soc);
     else                snprintf(buf, sizeof(buf), "-- %%");
-    draw_text(buf, EPD_WIDTH - 140, 75);
+    draw_text(buf, EPD_WIDTH - 180, battery_card_y + 85);
 
     // Strom unterhalb des Balkens
     ftoa1(d.current, buf, sizeof(buf));
     strncat(buf, " A", sizeof(buf) - strlen(buf) - 1);
-    draw_text(buf, COL_LEFT, 185);
+    draw_text(buf, COL_LEFT + 20, battery_card_y + 140);
 
-    // ── Trennlinie ───────────────────────────────────────────────────────────
-    draw_hline(COL_LEFT, 200, EPD_WIDTH - 40);
-
-    // ── Abschnitt 2: Solar / Verbrauch (y 200..340) ──────────────────────────
-
-    draw_text("SOLAR", COL_LEFT, 255);
+    // ── Abschnitt 2: Solar/Verbrauch-Karten (y 200..340) ────────────────────
+    
+    const int power_card_y = 200;
+    const int power_card_h = 120;
+    const int card_gap = 20;
+    const int card_w = (EPD_WIDTH - 60 - card_gap) / 2;
+    
+    // Solar-Karte
+    draw_card(COL_LEFT, power_card_y, card_w, power_card_h, 0xF5, true);
+    draw_solar_icon(COL_LEFT + 20, power_card_y + 20);
+    draw_text("SOLAR", COL_LEFT + 60, power_card_y + 40);
     ftoa1(d.solar_w, buf, sizeof(buf));
     strncat(buf, " W", sizeof(buf) - strlen(buf) - 1);
-    draw_text(buf, COL_LEFT, 315);
-
-    // Vertikale Mittellinie zwischen Solar und Verbrauch
-    epd_draw_vline(COL_MID, 200, 140, 0x00, fb);
-
-    draw_text("VERBRAUCH", COL_MID + 20, 255);
+    draw_text(buf, COL_LEFT + 20, power_card_y + 80);
+    
+    // Verbrauch-Karte
+    const int load_card_x = COL_LEFT + card_w + card_gap;
+    draw_card(load_card_x, power_card_y, card_w, power_card_h, 0xF5, true);
+    draw_load_icon(load_card_x + 20, power_card_y + 20);
+    draw_text("VERBRAUCH", load_card_x + 60, power_card_y + 40);
     ftoa1(d.load_w, buf, sizeof(buf));
     strncat(buf, " W", sizeof(buf) - strlen(buf) - 1);
-    draw_text(buf, COL_MID + 20, 315);
+    draw_text(buf, load_card_x + 20, power_card_y + 80);
 
-    // ── Trennlinie ───────────────────────────────────────────────────────────
-    draw_hline(COL_LEFT, 340, EPD_WIDTH - 40);
-
-    // ── Abschnitt 3: Temperaturen (zwischen y=340 und y=400) ─────────────────
-    // Kleine Schrift: optisch etwas unter die geometrische Mitte schieben, damit
-    // oben mehr Luft zur Trennlinie ist und unten weniger Leerfeld bleibt.
-    // \xb0 = ° in Latin-1 (wie bei writeln erwartet)
-    const int temp_col_w = (EPD_WIDTH - 2 * COL_LEFT) / 4;
-    constexpr int TEMP_BAND_Y0       = 340;
-    constexpr int TEMP_BAND_Y1       = 400;
-    constexpr int TEMP_BAND_MID      = (TEMP_BAND_Y0 + TEMP_BAND_Y1) / 2;
-    constexpr int TEMP_VERTICAL_BIAS = 9;   // px nach unten (Feintuning)
-    constexpr int TEMP_BASE_GAP        = 24;  // Abstand der beiden Baselines
-    const int mid    = TEMP_BAND_MID + TEMP_VERTICAL_BIAS;
-    const int y_temp_lbl = mid - TEMP_BASE_GAP / 2;
-    const int y_temp_val = mid + TEMP_BASE_GAP / 2;
-    struct { float val; const char *name; } temps[] = {
-        { d.temp_aussen,  "Aussen" },
-        { d.temp_innen,   "Innen" },
-        { d.temp_fridge,  "Kuehlschrank" },
-        { d.temp_cabinet, "Geraeteschrank" },
+    // ── Abschnitt 3: Temperatur-Karten (y=340 bis y=400) ───────────────────
+    
+    const int temp_card_y = 340;
+    const int temp_card_h = 60;
+    const int temp_gap = 8;
+    const int temp_card_w = (EPD_WIDTH - 60 - 3 * temp_gap) / 4;
+    
+    struct { float val; const char *name; uint8_t color; } temps[] = {
+        { d.temp_aussen,  "Aussen", 0xF0 },
+        { d.temp_innen,   "Innen", 0xF2 },
+        { d.temp_fridge,  "Kuehl", 0xE8 },
+        { d.temp_cabinet, "Schrank", 0xF0 },
     };
+    
     for (size_t i = 0; i < sizeof(temps) / sizeof(temps[0]); i++) {
-        int x = COL_LEFT + (int)i * temp_col_w;
-        draw_text_small(temps[i].name, x, y_temp_lbl);
+        int x = COL_LEFT + (int)i * (temp_card_w + temp_gap);
+        
+        // Mini-Karte für jede Temperatur
+        draw_card(x, temp_card_y, temp_card_w, temp_card_h, temps[i].color, false);
+        
+        // Temperatur-Icon (vereinfachtes Thermometer)
+        epd_draw_rect(x + 8, temp_card_y + 8, 3, 20, 0x00, fb);
+        epd_fill_circle(x + 9, temp_card_y + 30, 4, 0x00, fb);
+        
+        // Text
+        draw_text_small(temps[i].name, x + 18, temp_card_y + 20);
         char tmp[16];
         ftoa1(temps[i].val, tmp, sizeof(tmp));
-        snprintf(buf, sizeof(buf), "%s \xb0""C", tmp);
-        draw_text_small(buf, x, y_temp_val);
+        snprintf(buf, sizeof(buf), "%s\xb0", tmp);
+        draw_text_small(buf, x + 18, temp_card_y + 40);
     }
 }
 
@@ -189,39 +297,84 @@ static const char *relay_st_txt(int8_t v) {
     return "--";
 }
 
-// Status + unteres Menue (Abschnitt 3, y 400..540)
+// Status + unteres Menue (Abschnitt 4, y 410..540) - Fancy Design
 static void render_status(bool mqtt_ok, const char *ip, int menu_sel, const int8_t *relay_st) {
-    char buf[32];
+    char buf[64];
 
-    draw_hline(COL_LEFT, 400, EPD_WIDTH - 40);
+    // Status-Karte
+    const int status_y = 410;
+    draw_card(COL_LEFT, status_y, EPD_WIDTH - 60, 30, 0xF8, false);
+    
+    // Status-Icons und Text
+    // WiFi-Icon (vereinfacht)
+    epd_draw_circle(COL_LEFT + 15, status_y + 15, 3, 0x00, fb);
+    for (int i = 1; i <= 3; i++) {
+        epd_draw_circle(COL_LEFT + 15, status_y + 15, 3 + i * 2, 0x88, fb);
+    }
+    
+    // MQTT-Icon (vereinfacht)
+    epd_draw_rect(COL_LEFT + 200, status_y + 10, 8, 8, 0x00, fb);
+    epd_draw_line(COL_LEFT + 204, status_y + 8, COL_LEFT + 204, status_y + 20, 0x00, fb);
+    
+    snprintf(buf, sizeof(buf), "WiFi: %s     MQTT: %s",
+             ip ? ip : "--", mqtt_ok ? "✓" : "✗");
+    draw_text_small(buf, COL_LEFT + 40, status_y + 20);
 
-    snprintf(buf, sizeof(buf), "WiFi: %s   MQTT: %s",
-             ip ? ip : "--", mqtt_ok ? "OK" : "--");
-    draw_text_small(buf, COL_LEFT, 430);
-
-    // Menueleiste: Relais zeigen Istzustand (MQTT state)
-    const int y0   = 458;
-    const int h    = 56;
-    const int gap  = 6;
-    const int n    = MENU_ITEM_COUNT;
+    // Fancy Menu-Buttons mit abgerundeten Ecken und Schatten
+    const int menu_y = 458;
+    const int menu_h = 56;
+    const int gap = 8;
+    const int n = MENU_ITEM_COUNT;
     const int cell = (EPD_WIDTH - 2 * COL_LEFT - (n - 1) * gap) / n;
-    const int x0   = COL_LEFT;
 
     for (int i = 0; i < n; i++) {
-        int x = x0 + i * (cell + gap);
-        if (i == menu_sel) {
-            epd_draw_rect(x, y0, cell, h, 0x00, fb);
-            epd_draw_rect(x + 2, y0 + 2, cell - 4, h - 4, 0x00, fb);
-        } else {
-            epd_draw_rect(x, y0, cell, h, 0x99, fb);
-        }
+        int x = COL_LEFT + i * (cell + gap);
+        
+        // Button-Stil abhängig von Auswahl und Status
+        uint8_t bg_color = 0xF0;
+        bool selected = (i == menu_sel);
+        
         if (i < RELAY_STATE_COUNT) {
-            snprintf(buf, sizeof(buf), "R%d %s", i + 1, relay_st_txt(relay_st[i]));
-        } else {
-            strncpy(buf, "Bild neu", sizeof(buf) - 1);
-            buf[sizeof(buf) - 1] = '\0';
+            // Relais-Status-Farbe
+            if (relay_st[i] == 1) bg_color = 0xD0;      // Aktiv = dunkler
+            else if (relay_st[i] == 0) bg_color = 0xF0; // Inaktiv = hell
+            else bg_color = 0xE0;                       // Unbekannt = mittel
         }
-        draw_text(buf, x + 6, y0 + 38);
+        
+        // Fancy Button mit Schatten und Auswahl-Effekt
+        if (selected) {
+            // Ausgewählter Button: doppelter Rahmen, kein Schatten
+            draw_card(x, menu_y, cell, menu_h, bg_color, false);
+            epd_draw_rect(x - 2, menu_y - 2, cell + 4, menu_h + 4, 0x00, fb);
+            epd_draw_rect(x - 1, menu_y - 1, cell + 2, menu_h + 2, 0x44, fb);
+        } else {
+            // Normaler Button mit Schatten
+            draw_card(x, menu_y, cell, menu_h, bg_color, true);
+        }
+        
+        // Button-Text und Icons
+        if (i < RELAY_STATE_COUNT) {
+            // Relais-Icon (vereinfachter Schalter)
+            int icon_x = x + 8;
+            int icon_y = menu_y + 12;
+            epd_draw_rect(icon_x, icon_y, 12, 8, 0x00, fb);
+            if (relay_st[i] == 1) {
+                epd_fill_rect(icon_x + 2, icon_y + 2, 8, 4, 0x00, fb);
+            }
+            
+            snprintf(buf, sizeof(buf), "R%d", i + 1);
+            draw_text_small(buf, x + 25, menu_y + 20);
+            draw_text_small(relay_st_txt(relay_st[i]), x + 8, menu_y + 40);
+        } else {
+            // Refresh-Icon
+            int icon_x = x + cell/2 - 6;
+            int icon_y = menu_y + 15;
+            epd_draw_circle(icon_x + 6, icon_y + 6, 8, 0x00, fb);
+            epd_draw_line(icon_x + 2, icon_y + 2, icon_x + 6, icon_y + 6, 0xFF, fb);
+            epd_draw_line(icon_x + 6, icon_y + 6, icon_x + 10, icon_y + 2, 0xFF, fb);
+            
+            draw_text_small("Refresh", x + 8, menu_y + 40);
+        }
     }
 }
 
