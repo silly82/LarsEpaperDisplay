@@ -38,6 +38,12 @@ void config_erase();
 bool wifi_connect(const AppConfig &cfg, uint32_t timeout_ms = 15000,
                   void (*while_waiting)(void) = nullptr);
 
+// Non-blocking Reconnect: startet Verbindung, gibt sofort zurück.
+// Aufruf in der Loop: wifi_reconnect_start() einmal aufrufen,
+// dann in nachfolgenden Iterationen wifi_reconnect_poll() prüfen.
+void wifi_reconnect_start(const AppConfig &cfg);
+bool wifi_reconnect_poll();
+
 // Öffnet AP "CampingDisplay" und startet den Webserver.
 // while_idle: optional (z. B. btn.loop) in der AP-Schleife.
 void wifi_prov_start(void (*while_idle)(void) = nullptr);

@@ -54,7 +54,11 @@ void config_erase() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 bool wifi_connect(const AppConfig &cfg, uint32_t timeout_ms, void (*while_waiting)(void)) {
-    WiFi.mode(WIFI_STA);
+    if (WiFi.getMode() != WIFI_STA) {
+        WiFi.mode(WIFI_STA);
+    }
+    WiFi.disconnect();
+    delay(50);
     WiFi.begin(cfg.wifi_ssid.c_str(), cfg.wifi_pass.c_str());
 
     uint32_t t0 = millis();
@@ -64,6 +68,36 @@ bool wifi_connect(const AppConfig &cfg, uint32_t timeout_ms, void (*while_waitin
         delay(10);
     }
     return true;
+}
+
+static bool     s_reconnect_active = false;
+static uint32_t s_reconnect_start  = 0;
+static uint32_t s_reconnect_timeout = 10000;
+
+void wifi_reconnect_start(const AppConfig &cfg) {
+    if (s_reconnect_active) return;
+    if (WiFi.getMode() != WIFI_STA) {
+        WiFi.mode(WIFI_STA);
+    }
+    WiFi.disconnect();
+    delay(50);
+    WiFi.begin(cfg.wifi_ssid.c_str(), cfg.wifi_pass.c_str());
+    s_reconnect_active  = true;
+    s_reconnect_start   = millis();
+    s_reconnect_timeout = 10000;
+}
+
+bool wifi_reconnect_poll() {
+    if (!s_reconnect_active) return WiFi.status() == WL_CONNECTED;
+    if (WiFi.status() == WL_CONNECTED) {
+        s_reconnect_active = false;
+        return true;
+    }
+    if (millis() - s_reconnect_start > s_reconnect_timeout) {
+        s_reconnect_active = false;
+        return false;
+    }
+    return false;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

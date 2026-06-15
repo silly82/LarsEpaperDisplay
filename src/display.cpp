@@ -14,6 +14,7 @@
 // Farben: 0x00 = schwarz, 0xFF = weiss, Zwischenwerte = Graustufen.
 // ─────────────────────────────────────────────────────────────────────────────
 static uint8_t *fb = nullptr;
+static uint8_t *s_small_text_buf = nullptr;
 
 // ── Layout-Konstanten ─────────────────────────────────────────────────────────
 static const int COL_LEFT = 30;    // linker Rand (mehr Padding)
@@ -53,20 +54,15 @@ static inline void px_set(uint8_t *buf, int x, int y, uint8_t v) {
 }
 
 static void draw_text_small(const char *text, int dest_x, int baseline_y) {
-    // FiraSans: ascender≈39, descender≈12, advance_y≈50
-    // Wir rendern in ein Temp-Puffer (volle Breite, 70 Zeilen) und skalieren 2:1
-    // ins Haupt-FB. Ergebnis: Glyphen ~halb so gross (~25 px Höhe).
     const int SRCTH = 70;
-    const int SRC_BL = 50;   // Baseline im Temp-Puffer
+    const int SRC_BL = 50;
     int y_top = baseline_y - SRC_BL / 2;
 
-    uint8_t *tmp = (uint8_t *)heap_caps_malloc((EPD_WIDTH / 2) * SRCTH,
-                                               MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!tmp) return;
-    memset(tmp, 0xFF, (EPD_WIDTH / 2) * SRCTH);
+    if (!s_small_text_buf) return;
+    memset(s_small_text_buf, 0xFF, (EPD_WIDTH / 2) * SRCTH);
 
     int32_t cx = 0, cy = SRC_BL;
-    writeln((GFXfont *)&FiraSans, text, &cx, &cy, tmp);
+    writeln((GFXfont *)&FiraSans, text, &cx, &cy, s_small_text_buf);
 
     for (int sy = 0; sy + 1 < SRCTH; sy += 2) {
         int dy = y_top + sy / 2;
@@ -74,16 +70,15 @@ static void draw_text_small(const char *text, int dest_x, int baseline_y) {
         for (int sx = 0; sx + 1 < EPD_WIDTH; sx += 2) {
             int dx = dest_x + sx / 2;
             if (dx >= EPD_WIDTH) break;
-            uint32_t v = (uint32_t)px_get(tmp, sx,   sy)
-                       + (uint32_t)px_get(tmp, sx+1, sy)
-                       + (uint32_t)px_get(tmp, sx,   sy+1)
-                       + (uint32_t)px_get(tmp, sx+1, sy+1);
+            uint32_t v = (uint32_t)px_get(s_small_text_buf, sx,   sy)
+                       + (uint32_t)px_get(s_small_text_buf, sx+1, sy)
+                       + (uint32_t)px_get(s_small_text_buf, sx,   sy+1)
+                       + (uint32_t)px_get(s_small_text_buf, sx+1, sy+1);
             uint8_t avg = (uint8_t)(v / 4);
             if (avg < 0xF)
                 px_set(fb, dx, dy, avg);
         }
     }
-    heap_caps_free(tmp);
 }
 
 static void draw_hline(int x, int y, int len) {
@@ -286,7 +281,7 @@ static void render_data(const VictronData &d) {
         draw_text_small(temps[i].name, x + 18, temp_card_y + 20);
         char tmp[16];
         ftoa1(temps[i].val, tmp, sizeof(tmp));
-        snprintf(buf, sizeof(buf), "%s\xb0", tmp);
+        snprintf(buf, sizeof(buf), "%s \xb0""C", tmp);
         draw_text_small(buf, x + 18, temp_card_y + 40);
     }
 }
@@ -298,27 +293,25 @@ static const char *relay_st_txt(int8_t v) {
 }
 
 // Status + unteres Menue (Abschnitt 4, y 410..540) - Fancy Design
-static void render_status(bool mqtt_ok, const char *ip, int menu_sel, const int8_t *relay_st) {
+static void render_status(bool wifi_ok, bool mqtt_ok, const char *ip, int menu_sel,
+                          const int8_t *relay_st) {
     char buf[64];
 
-    // Status-Karte
     const int status_y = 410;
     draw_card(COL_LEFT, status_y, EPD_WIDTH - 60, 30, 0xF8, false);
-    
-    // Status-Icons und Text
-    // WiFi-Icon (vereinfacht)
-    epd_draw_circle(COL_LEFT + 15, status_y + 15, 3, 0x00, fb);
-    for (int i = 1; i <= 3; i++) {
-        epd_draw_circle(COL_LEFT + 15, status_y + 15, 3 + i * 2, 0x88, fb);
+
+    if (!wifi_ok) {
+        snprintf(buf, sizeof(buf), "WLAN getrennt – verbinde...");
+        draw_text_small(buf, COL_LEFT + 40, status_y + 20);
+    } else {
+        epd_draw_circle(COL_LEFT + 15, status_y + 15, 3, 0x00, fb);
+        for (int i = 1; i <= 3; i++) {
+            epd_draw_circle(COL_LEFT + 15, status_y + 15, 3 + i * 2, 0x88, fb);
+        }
+        snprintf(buf, sizeof(buf), "WiFi: %s     MQTT: %s",
+                 ip ? ip : "--", mqtt_ok ? "OK" : "getrennt");
+        draw_text_small(buf, COL_LEFT + 40, status_y + 20);
     }
-    
-    // MQTT-Icon (vereinfacht)
-    epd_draw_rect(COL_LEFT + 200, status_y + 10, 8, 8, 0x00, fb);
-    epd_draw_line(COL_LEFT + 204, status_y + 8, COL_LEFT + 204, status_y + 20, 0x00, fb);
-    
-    snprintf(buf, sizeof(buf), "WiFi: %s     MQTT: %s",
-             ip ? ip : "--", mqtt_ok ? "✓" : "✗");
-    draw_text_small(buf, COL_LEFT + 40, status_y + 20);
 
     // Fancy Menu-Buttons mit abgerundeten Ecken und Schatten
     const int menu_y = 458;
@@ -416,11 +409,12 @@ static void epd_push(bool with_clear) {
 
 void display_init() {
     epd_init();
-    // PSRAM-Allokation: ps_malloc für bessere Kontrolle über Initialisierung
     fb = (uint8_t *)ps_malloc(EPD_WIDTH * EPD_HEIGHT / 2);
     if (fb) {
-        fb_clear();   // Framebuffer auf Weiss setzen
+        fb_clear();
     }
+    s_small_text_buf = (uint8_t *)heap_caps_malloc((EPD_WIDTH / 2) * 70,
+                                                    MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 }
 
 void display_boot_msg(const char *line1, const char *line2) {
@@ -430,23 +424,24 @@ void display_boot_msg(const char *line1, const char *line2) {
     epd_push(/*with_clear=*/true);
 }
 
-void display_full_refresh(const VictronData &d, bool mqtt_ok, const char *ip, int menu_sel,
-                          const int8_t *relay_st) {
+void display_full_refresh(const VictronData &d, bool wifi_ok, bool mqtt_ok, const char *ip,
+                          int menu_sel, const int8_t *relay_st) {
     fb_clear();
     render_data(d);
-    render_status(mqtt_ok, ip, menu_sel, relay_st);
+    render_status(wifi_ok, mqtt_ok, ip, menu_sel, relay_st);
     epd_push(/*with_clear=*/true);
 }
 
-void display_menu_strip_update(bool mqtt_ok, const char *ip, int menu_sel,
+void display_menu_strip_update(bool wifi_ok, bool mqtt_ok, const char *ip, int menu_sel,
                                const int8_t *relay_st) {
     fb_clear_rect(0, STATUS_TOP, EPD_WIDTH, EPD_HEIGHT - STATUS_TOP);
-    render_status(mqtt_ok, ip, menu_sel, relay_st);
+    render_status(wifi_ok, mqtt_ok, ip, menu_sel, relay_st);
     Rect_t area = { 0, STATUS_TOP, EPD_WIDTH, EPD_HEIGHT - STATUS_TOP };
     epd_push_region(area);
 }
 
-void display_partial_update(const VictronData &d, const VictronData &last_d, bool mqtt_ok, const char *ip) {
+void display_partial_update(const VictronData &d, const VictronData &last_d,
+                            bool wifi_ok, bool mqtt_ok, const char *ip) {
     char buf[32];
     bool any_update = false;
 
@@ -530,8 +525,8 @@ void display_partial_update(const VictronData &d, const VictronData &last_d, boo
         struct { float val; const char *name; } temps[] = {
             { d.temp_aussen,  "Aussen" },
             { d.temp_innen,   "Innen" },
-            { d.temp_fridge,  "Kuehlschrank" },
-            { d.temp_cabinet, "Geraeteschrank" },
+            { d.temp_fridge,  "Kuehl" },
+            { d.temp_cabinet, "Schrank" },
         };
         
         for (size_t i = 0; i < sizeof(temps) / sizeof(temps[0]); i++) {

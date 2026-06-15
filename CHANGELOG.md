@@ -2,6 +2,27 @@
 
 Alle nennenswerten Änderungen pro Version.
 
+## [0.9.0] – 2026-06-15
+
+### WiFi-Reconnect (kritischer Fix)
+- **Non-blocking Reconnect:** `wifi_connect()` im Loop blockiert nicht mehr 10 s; stattdessen `wifi_reconnect_start()` + `wifi_reconnect_poll()` – Loop läuft weiter, Taster bleibt reaktiv.
+- **Display zeigt „WLAN getrennt – verbinde..."** im Status-Bereich statt starrer alter Daten.
+- **WiFi.disconnect() vor WiFi.begin():** verhindert undefinierten WiFi-Driver-Zustand bei Reconnect.
+- **WiFi.mode() nur setzen wenn nötig:** vermeidet komplette WiFi-Stack-Neuinitialisierung bei jedem Reconnect.
+- **Nach Reconnect:** IP aktualisieren, Full-Refresh erzwingen.
+
+### Display
+- **WiFi-Status in allen Display-Funktionen:** `wifi_ok` Parameter in `display_full_refresh`, `display_partial_update`, `display_menu_strip_update`.
+- **MQTT-Status:** zeigt „getrennt" statt „✗" wenn MQTT nicht verbunden.
+- **Temperatur-Konsistenz:** gleiche Namen in Vollbild und Partial-Update ("Kuehl", "Schrank").
+- **Grad-Symbol konsistent:** „°C" mit Leerzeichen in allen Temperatur-Anzeigen.
+
+### Performance
+- **`draw_text_small()` PSRAM-Puffer wiederverwendet:** statischer Buffer statt malloc/free pro Aufruf (~330 KB Fragmentierung vermieden).
+- **Schwellenwerte vereinfacht:** `threshold_exceeded()` verwendet direkt `config.h`-Werte ohne hardcoded Multiplikatoren.
+- **MQTT-Callback vereinfacht:** kein mehrfacher Aufruf von `threshold_exceeded()` pro Nachricht; nur `full_refresh_needed` flag setzen.
+- **Gate-Logik vereinfacht:** `DATA_REFRESH_INTERVAL_MS` direkt statt `* 3`; `significant_change`-Flag entfernt.
+
 ## [0.7.1] – 2026-04-25
 
 ### MQTT

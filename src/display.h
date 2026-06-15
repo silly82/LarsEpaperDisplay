@@ -53,13 +53,14 @@ void display_init();
 void display_boot_msg(const char *line1, const char *line2 = nullptr);
 
 // relay_st: RELAY_STATE_COUNT Eintraege (-1/0/1)
-void display_full_refresh(const VictronData &d, bool mqtt_ok, const char *ip, int menu_sel,
-                          const int8_t *relay_st);
+void display_full_refresh(const VictronData &d, bool wifi_ok, bool mqtt_ok, const char *ip,
+                          int menu_sel, const int8_t *relay_st);
 
 // Partielle Updates für einzelne Bereiche
-void display_partial_update(const VictronData &d, const VictronData &last_d, bool mqtt_ok, const char *ip);
+void display_partial_update(const VictronData &d, const VictronData &last_d,
+                            bool wifi_ok, bool mqtt_ok, const char *ip);
 
-void display_menu_strip_update(bool mqtt_ok, const char *ip, int menu_sel,
+void display_menu_strip_update(bool wifi_ok, bool mqtt_ok, const char *ip, int menu_sel,
                                const int8_t *relay_st);
 
 // Provisioning-Bildschirm: zeigt AP-SSID, Passwort und URL an.
